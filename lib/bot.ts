@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
 import { env } from "./env";
-import { db, getAjustes, getClientes, type Cliente, type Factura, type Gasto } from "./db";
+import { db, descargarArchivo, getAjustes, getClientes, type Cliente, type Factura, type Gasto } from "./db";
 import { euros, fechaES, hoyMadrid, round2, tipoClientePorPais } from "./fiscal";
 import {
   aplicarCorreccion, buscarDuplicado, gastoPorMensaje, gastosDelTrimestre, getGasto,
@@ -10,7 +10,7 @@ import {
   comprobarAntesDeEmitir, emitirFactura, facturaPorMensaje, getFactura, pdfPorNumero, prepararBorrador,
 } from "./facturacion";
 import { trimestreActual } from "./recordatorios";
-import { esPropia, modoParalelo, prepararExterna, registrarExterna } from "./externas";
+import { esPropia, modoParalelo, pistasDePropia, prepararExterna, registrarExterna } from "./externas";
 import { enviarCopia } from "./copia";
 import { responder, type Acciones } from "./agente";
 import { transcribir } from "./voz";
@@ -58,6 +58,19 @@ function textoGasto(g: Gasto, duplicado: Gasto | null): string {
 
 const tecladoGasto = (id: string) =>
   new InlineKeyboard().text("✅ Guardar", `g:ok:${id}`).text("🗑 Descartar", `g:no:${id}`);
+
+function textoPregunta(g: Gasto, pistas: ReturnType<typeof pistasDePropia>): string {
+  const l: string[] = ["🤔 ¿Esta factura es tuya o es un gasto?"];
+  const nif = g.nif ? `NIF ${g.nif}` : "(sin NIF)";
+  l.push(`El emisor que leo es «${g.proveedor ?? "?"}» (${nif}), que no es tu NIF, pero:`);
+  for (const p of pistas) l.push(`· ${p.texto}`);
+  return l.join("\n");
+}
+
+const tecladoPregunta = (id: string) =>
+  new InlineKeyboard().text("📥 Es mía (venta)", `p:venta:${id}`).text("🧾 Es un gasto", `p:gasto:${id}`);
+
+const MIME_POR_EXT: Record<string, string> = { pdf: "application/pdf", jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 async function textoFactura(f: Factura, c: Cliente): Promise<string> {
   const { bloqueos, avisos, ajustes } = await comprobarAntesDeEmitir(f);
@@ -198,10 +211,21 @@ function crearBot(): Bot {
       return;
     }
     const g = await registrarDesdeArchivo(leido);
+    await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
+    const [ajustes, clientes] = await Promise.all([getAjustes(), getClientes()]);
+    const pistas = pistasDePropia(
+      { proveedor: g.proveedor, numero_factura: g.numero_factura, nif_destinatario: leido.extraido.nif_destinatario },
+      ajustes,
+      clientes,
+    );
+    if (pistas.length) {
+      // No se usa setMensaje: responder a esta pregunta no debe corregir el gasto.
+      await ctx.reply(textoPregunta(g, pistas), { reply_markup: tecladoPregunta(g.id) });
+      return;
+    }
     const dup = await buscarDuplicado(g);
     const msg = await ctx.reply(textoGasto(g, dup), { reply_markup: tecladoGasto(g.id) });
     await setMensaje("gastos", g.id, msg.message_id);
-    await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
   };
 
   b.on("message:photo", async (ctx) => {
@@ -233,6 +257,40 @@ function crearBot(): Bot {
       await setEstado(id, "descartado");
       await ctx.answerCallbackQuery("Descartado");
       await ctx.editMessageText(`🗑 Descartado: ${g.proveedor ?? "gasto"}`);
+    }
+  });
+
+  b.callbackQuery(/^p:(venta|gasto):(.+)$/, async (ctx) => {
+    const [, accion, id] = ctx.match!;
+    const g = await getGasto(id);
+    if (!g || g.estado !== "borrador") return ctx.answerCallbackQuery("Ya estaba resuelta");
+    if (accion === "gasto") {
+      const dup = await buscarDuplicado(g);
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText(textoGasto(g, dup), { reply_markup: tecladoGasto(g.id) });
+      await setMensaje("gastos", g.id, ctx.callbackQuery.message!.message_id);
+      return;
+    }
+    if (!g.archivo_path) {
+      await ctx.answerCallbackQuery({ text: "No se pudo registrar" });
+      return ctx.editMessageText("⛔ No encuentro el archivo original: vuelve a mandármelo.");
+    }
+    try {
+      const bytes = await descargarArchivo(g.archivo_path);
+      const ext = g.archivo_path.split(".").pop() ?? "pdf";
+      const mime = MIME_POR_EXT[ext] ?? "application/pdf";
+      const r = await prepararExterna({ bytes, mime, ext });
+      await setEstado(id, "descartado");
+      await ctx.answerCallbackQuery();
+      if (!r.ok) {
+        await ctx.editMessageText(`🤔 ${r.duda}`);
+        return;
+      }
+      await ctx.editMessageText(textoExterna(r.factura, r.cliente, r.avisos), { reply_markup: tecladoExterna(r.factura.id) });
+      await setMensaje("facturas", r.factura.id, ctx.callbackQuery.message!.message_id);
+    } catch (e) {
+      await ctx.answerCallbackQuery({ text: "No se pudo registrar" });
+      await ctx.reply(`⛔ No pude prepararla como factura:\n${e instanceof Error ? e.message : String(e)}\nVuelve a pulsar «Es mía».`);
     }
   });
 

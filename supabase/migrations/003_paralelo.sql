@@ -12,6 +12,8 @@ exception when duplicate_object then null; end $$;
 alter table facturas add column if not exists numero_externo text;
 
 -- La emisión de IVAn queda bloqueada en modo paralelo (también aquí, por si algo se salta el bot).
+-- Orden de bloqueo: ajustes → facturas, igual que en registrar_factura_externa(), para que dos
+-- llamadas a la vez esperen en vez de bloquearse entre sí (deadlock).
 create or replace function emitir_factura(p_factura_id uuid)
 returns text
 language plpgsql
@@ -23,7 +25,7 @@ declare
   v_origen text;
   v_desde date;
 begin
-  select emitir_desde into v_desde from ajustes where id = 1;
+  select emitir_desde into v_desde from ajustes where id = 1 for update;
   if v_desde is not null and (now() at time zone 'Europe/Madrid')::date < v_desde then
     raise exception 'Modo paralelo hasta el %: emítela en el otro programa y registra aquí su PDF', to_char(v_desde, 'DD/MM/YYYY');
   end if;

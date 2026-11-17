@@ -76,6 +76,20 @@ async function caso(nombre: string, fn: () => Promise<void>) {
 const enviados = (metodo = "sendMessage") => F.telegram.filter((t) => t.metodo === metodo);
 const ultimoTexto = () => String(enviados().at(-1)?.params.text ?? "");
 
+/** Espera a que PostgREST vuelva a responder tras un reset de la base (se desconecta y se reconecta solo). */
+async function esperarPostgrest(db: () => { from: Function }, maxMs = 60_000) {
+  const inicio = Date.now();
+  while (Date.now() - inicio < maxMs) {
+    const { error } = await db().from("ajustes").select("id").limit(1);
+    if (!error) {
+      console.log(`    (PostgREST ha vuelto en ${Date.now() - inicio} ms)`);
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error(`PostgREST no ha vuelto en ${maxMs} ms: mira ${process.env.TMPDIR ?? "/tmp"}/postgrest.log`);
+}
+
 async function main() {
   const srv = await F.arrancar();
   const { getBot } = await import("@/lib/bot");
@@ -542,6 +556,64 @@ async function main() {
     assert.match(ultimoTexto(), /No tengo a Nuevo Cliente GmbH \(DE123456789\)\. Añádelo con \/cliente_nuevo/);
   });
 
+  const nifMalLeido = (fileId: string) => {
+    F.guionClaude.push(
+      forzada("guardar_gasto", {
+        es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
+        fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3060, iva: 0, total: 3060, nif_destinatario: "FI26899624", notas: null,
+      }),
+    );
+    return pdfSelfconta(fileId);
+  };
+
+  await caso('NIF mal leído: pregunta y, con "Es mía", la prepara como venta', async () => {
+    await mensaje("", nifMalLeido("sc342mal"));
+    const m = ultimoConBotones();
+    assert.match(String(m.params.text), /¿Esta factura es tuya o es un gasto\?/);
+    assert.match(String(m.params.text), /el emisor se llama como tú/);
+    assert.match(String(m.params.text), /el número 00342 es el siguiente de tu serie/);
+    assert.match(String(m.params.text), /el cliente es Zapflow Oy, uno de los tuyos/);
+    assert.match(JSON.stringify(m.params.reply_markup), /p:venta:/);
+    assert.match(JSON.stringify(m.params.reply_markup), /p:gasto:/);
+    const g = (await db().from("gastos").select("*").eq("estado", "borrador").single()).data!;
+    assert.equal((await db().from("facturas").select("id").eq("numero_externo", "00342")).data!.length, 0);
+
+    const msgId = F.nuevoIdMensaje();
+    F.guionClaude.push(emitida({ numero: "342" }));
+    await pulsar(`p:venta:${g.id}`, msgId);
+    assert.ok(F.telegram.some((t) => t.metodo === "editMessageText" && /📥 Factura tuya hecha fuera de IVAn · 00342/.test(String(t.params.text))));
+    assert.equal((await db().from("gastos").select("estado").eq("id", g.id).single()).data!.estado, "descartado");
+    const f = (await db().from("facturas").select("*").eq("numero_externo", "00342").single()).data!;
+
+    await pulsar(`x:no:${f.id}`, await idMensajeFactura(f.id));
+    assert.equal((await db().from("facturas").select("id").eq("id", f.id)).data!.length, 0, "deja de estar pendiente");
+    assert.equal((await ajustes()).ultimo_numero, 341);
+  });
+
+  await caso('NIF mal leído: con "Es un gasto" sigue como gasto', async () => {
+    await mensaje("", nifMalLeido("sc342mal2"));
+    const g = (await db().from("gastos").select("*").eq("estado", "borrador").single()).data!;
+
+    const msgId = F.nuevoIdMensaje();
+    await pulsar(`p:gasto:${g.id}`, msgId);
+    const edicion = F.telegram.filter((t) => t.metodo === "editMessageText").at(-1)!;
+    assert.match(String(edicion.params.text), /🧾 Gasto \(borrador\)/);
+    assert.match(JSON.stringify(edicion.params.reply_markup), /g:ok:/);
+
+    F.guionClaude.push(
+      forzada("guardar_gasto", {
+        es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
+        fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3000, iva: 0, total: 3000, nif_destinatario: "FI26899624", notas: null,
+      }),
+    );
+    await responderA(msgId, "la base es 3000");
+    const corregido = (await db().from("gastos").select("*").eq("id", g.id).single()).data!;
+    assert.equal(Number(corregido.base), 3000);
+
+    await pulsar(`g:no:${g.id}`, await idMensajeGasto(g.id));
+    assert.equal((await db().from("gastos").select("estado").eq("id", g.id).single()).data!.estado, "descartado");
+  });
+
   await caso("Las facturas registradas cuentan en el trimestre", async () => {
     let r: any;
     F.guionClaude.push(agente(usar("listar", { que: "facturas", anio: 2026, trimestre: 4 })), (p) => {
@@ -589,7 +661,7 @@ async function main() {
     const { crearCopia, restaurarCopia, TABLAS } = await import("@/lib/copia");
     const { copia } = await crearCopia();
     execSync(`${import.meta.dirname}/reset-db.sh --vacia`, { stdio: "ignore" });
-    await new Promise((r) => setTimeout(r, 1500)); // PostgREST recarga el esquema
+    await esperarPostgrest(db);
     await restaurarCopia(copia);
     for (const t of TABLAS) {
       const { data } = await db().from(t).select("*");

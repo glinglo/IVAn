@@ -17,6 +17,47 @@ export const nifSinPais = (s: string | null | undefined) =>
 export const esPropia = (nifEmisor: string | null | undefined, nifPropio: string) =>
   !!nifEmisor && nifSinPais(nifEmisor) === nifSinPais(nifPropio);
 
+const normalizarNombre = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+function nombreCoincide(proveedor: string, nombrePropio: string): boolean {
+  const palabras = normalizarNombre(nombrePropio)
+    .split(" ")
+    .filter((p) => p.length >= 3);
+  if (!palabras.length) return false;
+  const texto = normalizarNombre(proveedor);
+  const coincidencias = palabras.filter((p) => texto.includes(p)).length;
+  return coincidencias >= Math.min(2, palabras.length);
+}
+
+export type Pista = { tipo: "nombre" | "numero" | "cliente"; texto: string };
+
+/** Pistas de que un PDF leído como gasto es en realidad una factura propia con el NIF del emisor mal leído. */
+export function pistasDePropia(
+  x: { proveedor: string | null; numero_factura: string | null; nif_destinatario: string | null },
+  a: Pick<Ajustes, "nombre" | "nif" | "serie" | "digitos_numero" | "ultimo_numero">,
+  clientes: Pick<Cliente, "nombre" | "nif">[],
+): Pista[] {
+  const pistas: Pista[] = [];
+  if (x.proveedor && nombreCoincide(x.proveedor, a.nombre)) {
+    pistas.push({ tipo: "nombre", texto: "el emisor se llama como tú" });
+  }
+  if (x.numero_factura && normalizarNumero(x.numero_factura, a) === siguienteNumero(a)) {
+    pistas.push({ tipo: "numero", texto: `el número ${siguienteNumero(a)} es el siguiente de tu serie` });
+  }
+  const nifDestino = nifSinPais(x.nif_destinatario);
+  if (nifDestino && nifDestino !== nifSinPais(a.nif)) {
+    const cliente = clientes.find((c) => nifSinPais(c.nif) === nifDestino);
+    if (cliente) pistas.push({ tipo: "cliente", texto: `el cliente es ${cliente.nombre}, uno de los tuyos` });
+  }
+  return pistas;
+}
+
 /** «337» → «00337» con la serie y los dígitos de los ajustes. */
 export function normalizarNumero(numero: string, a: Pick<Ajustes, "serie" | "digitos_numero">): string {
   const n = numero.trim();
