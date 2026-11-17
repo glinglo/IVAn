@@ -11,7 +11,7 @@ export async function transcribir(audio: Uint8Array, nombre = "voz.ogg"): Promis
   form.append("model", process.env.TRANSCRIPTION_MODEL || "gpt-4o-mini-transcribe");
   form.append("language", "es");
   form.append("prompt", VOCABULARIO);
-  const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const res = await fetch(`${env.openaiBaseUrl}/audio/transcriptions`, {
     method: "POST",
     headers: { authorization: `Bearer ${key}` },
     body: form,

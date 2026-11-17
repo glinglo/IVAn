@@ -117,7 +117,8 @@ export async function pdfDeFactura(f: Factura): Promise<Uint8Array> {
     numero: f.numero,
     fecha: f.fecha,
     idioma: cliente.idioma,
-    emisor: ajustes,
+    // En operaciones intracomunitarias el cliente comprueba el NIF-IVA en VIES: va con el prefijo ES.
+    emisor: f.tipo === "ue" && !/^ES/i.test(ajustes.nif) ? { ...ajustes, nif: `ES${ajustes.nif}` } : ajustes,
     cliente: { nombre: cliente.nombre, nif: cliente.nif, direccion: cliente.direccion, pais: cliente.pais === "ES" ? null : nombrePais(cliente.pais) },
     concepto: f.concepto,
     base: f.base,

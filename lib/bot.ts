@@ -81,7 +81,7 @@ const tecladoFactura = (id: string) =>
 async function descargar(ctx: Context, fileId: string): Promise<Uint8Array> {
   const file = await ctx.api.getFile(fileId);
   if (!file.file_path) throw new Error("Telegram no me da el archivo (¿más de 20 MB?)");
-  const res = await fetch(`https://api.telegram.org/file/bot${env.telegramToken}/${file.file_path}`);
+  const res = await fetch(`${env.telegramApiRoot}/file/bot${env.telegramToken}/${file.file_path}`);
   if (!res.ok) throw new Error(`No pude descargar el archivo (${res.status})`);
   return new Uint8Array(await res.arrayBuffer());
 }
@@ -150,7 +150,7 @@ export async function getBot(): Promise<Bot> {
 }
 
 function crearBot(): Bot {
-  const b = new Bot(env.telegramToken);
+  const b = new Bot(env.telegramToken, { client: { apiRoot: env.telegramApiRoot } });
 
   // Solo tú.
   b.use(async (ctx, next) => {
@@ -237,14 +237,22 @@ function crearBot(): Bot {
       await ctx.answerCallbackQuery("Cancelada");
       return ctx.editMessageText("❌ Borrador cancelado.");
     }
+    let emitida: { numero: string; pdf: Uint8Array };
     try {
-      const { numero, pdf } = await emitirFactura(id);
-      await ctx.answerCallbackQuery(`Emitida ${numero}`);
-      await ctx.editMessageText(`✅ Factura ${numero} emitida · ${euros(f.total)}`);
-      await ctx.replyWithDocument(new InputFile(Buffer.from(pdf), `Factura-${numero}.pdf`));
+      emitida = await emitirFactura(id);
     } catch (e) {
       await ctx.answerCallbackQuery({ text: "No se pudo emitir", show_alert: false });
       await ctx.reply(`⛔ No la he emitido:\n${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    // A partir de aquí la factura YA está emitida: un fallo al avisar no puede decir lo contrario.
+    const { numero, pdf } = emitida;
+    await ctx.answerCallbackQuery(`Emitida ${numero}`).catch(() => {});
+    await ctx.editMessageText(`✅ Factura ${numero} emitida · ${euros(f.total)}`).catch(() => {});
+    try {
+      await ctx.replyWithDocument(new InputFile(Buffer.from(pdf), `Factura-${numero}.pdf`));
+    } catch {
+      await ctx.reply(`✅ La factura ${numero} está emitida, pero no he podido mandarte el PDF. Pídemelo con /pdf ${numero}`);
     }
   });
 

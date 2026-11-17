@@ -16,7 +16,7 @@ const UMBRALES = [10, 3, 1] as const;
  * Qué avisos tocan hoy. Pura: recibe la fecha y las claves ya enviadas.
  * - Al abrirse el plazo de un trimestre.
  * - A 10, 3 y 1 días del fin (solo el más urgente pendiente, para no mandar tres de golpe).
- * - El día 28 de cada mes, recordatorio para facturar.
+ * - Desde el día 28 de cada mes, recordatorio para facturar (una vez).
  */
 export function avisosDeHoy(hoy: string, enviados: Set<string>): Aviso[] {
   const avisos: Aviso[] = [];
@@ -53,7 +53,8 @@ export function avisosDeHoy(hoy: string, enviados: Set<string>): Aviso[] {
   }
 
   const [y, m, d] = hoy.split("-");
-  if (Number(d) === 28 && !enviados.has(`facturar-${y}-${m}`)) {
+  // Desde el 28: si el aviso diario se salta un día, sale al siguiente (una vez al mes).
+  if (Number(d) >= 28 && !enviados.has(`facturar-${y}-${m}`)) {
     avisos.push({
       clave: `facturar-${y}-${m}`,
       tipo: "facturar",

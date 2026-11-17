@@ -16,6 +16,8 @@ await bot.api.setMyCommands([
   { command: "factura", description: "Preparar una factura: /factura Zapflow 3060" },
   { command: "gastos", description: "Gastos del trimestre" },
   { command: "pdf", description: "PDF de una factura: /pdf 00337" },
+  { command: "panel", description: "Enlace al panel (15 minutos)" },
+  { command: "exportar", description: "Excel del año" },
   { command: "clientes", description: "Lista de clientes" },
   { command: "ajustes", description: "Tus datos (IBAN, email…)" },
   { command: "ayuda", description: "Qué puedo hacer" },

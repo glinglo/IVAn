@@ -224,16 +224,30 @@ export interface Linea349 {
   clave: "S" | "I";
   nombre: string;
   nif: string;
+  /** Como lo pide la Sede: código de país (Grecia = EL) y número sin prefijo. null si no se sabe. */
+  pais: string | null;
+  numero: string;
   base: number;
+}
+
+/** Separa «FI26899624» en FI + 26899624; si el VAT no lleva prefijo, usa el país del proveedor. */
+export function nifComunitario(nif: string, pais?: string | null): { pais: string | null; numero: string } {
+  const limpio = nif.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const m = /^([A-Z]{2})(.+)$/.exec(limpio);
+  if (m && (!pais || m[1] === pais.toUpperCase() || (m[1] === "EL" && pais.toUpperCase() === "GR"))) {
+    return { pais: m[1], numero: m[2] };
+  }
+  const p = pais ? (pais.toUpperCase() === "GR" ? "EL" : pais.toUpperCase()) : null;
+  return { pais: p, numero: limpio };
 }
 
 /** Operaciones intracomunitarias del trimestre agrupadas por operador. */
 export function modelo349(d: DatosCalc, anio: number, t: number): Linea349[] {
   const { desde, hasta } = rangoTrimestre(anio, t);
   const lineas = new Map<string, Linea349>();
-  const add = (clave: "S" | "I", nombre: string, nif: string, base: number) => {
+  const add = (clave: "S" | "I", nombre: string, nif: string, base: number, pais?: string | null) => {
     const k = `${clave}|${nif || nombre}`;
-    const l = lineas.get(k) ?? { clave, nombre, nif, base: 0 };
+    const l = lineas.get(k) ?? { clave, nombre, nif, ...nifComunitario(nif, pais), base: 0 };
     l.base = round2(l.base + base);
     lineas.set(k, l);
   };
@@ -241,7 +255,7 @@ export function modelo349(d: DatosCalc, anio: number, t: number): Linea349[] {
     if (f.tipo === "ue" && enRango(f.fecha, desde, hasta)) add("S", f.cliente ?? "?", f.nif_cliente ?? "", f.base);
   }
   for (const g of d.gastos) {
-    if (g.tipo === "ISP UE" && enRango(g.fecha, desde, hasta)) add("I", g.proveedor ?? "?", g.nif ?? "", g.base);
+    if (g.tipo === "ISP UE" && enRango(g.fecha, desde, hasta)) add("I", g.proveedor ?? "?", g.nif ?? "", g.base, g.pais);
   }
   return [...lineas.values()].sort((a, b) => a.clave.localeCompare(b.clave) || b.base - a.base);
 }

@@ -10,7 +10,7 @@ const emisor = {
 mkdirSync("muestras", { recursive: true });
 const ue = calcularImportes({ tipo: "ue", iva_pct: 21, retencion_pct: 15 }, 3060);
 writeFileSync("muestras/factura-ue.pdf", await generarFacturaPDF({
-  numero: "00337", fecha: "2026-11-30", idioma: "en", emisor,
+  numero: "00337", fecha: "2026-11-30", idioma: "en", emisor: { ...emisor, nif: `ES${emisor.nif}` },
   cliente: { nombre: "Zapflow Oy", nif: "FI26899624", direccion: "Dirección de ejemplo, 00100 Helsinki", pais: "Finland" },
   concepto: "UX services for Zapflow platform (November 2026) + Cursor subscription", ...ue,
 }));

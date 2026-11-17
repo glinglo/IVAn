@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { modelo130, modelo303, modelo349, pyg, type DatosCalc } from "../lib/calculo";
+import { modelo130, modelo303, modelo349, nifComunitario, pyg, type DatosCalc } from "../lib/calculo";
 
 const base = (cuota: number): DatosCalc => ({
   facturas: datos.facturas as DatosCalc["facturas"],
@@ -43,5 +43,14 @@ describe("Hoja de cálculo (cuota 452 €/mes)", () => {
     const l = modelo349(d, 2026, 1);
     expect(l.find((x) => x.clave === "S")).toMatchObject({ nombre: "Zapflow Oy", base: 9060 });
     expect(l.filter((x) => x.clave === "I").reduce((s, x) => s + x.base, 0)).toBeCloseTo(651, 2);
+  });
+  it("349: código de país y número separados, como en la Sede", () => {
+    expect(nifComunitario("FI26899624")).toEqual({ pais: "FI", numero: "26899624" });
+    expect(nifComunitario("04788290", "CZ")).toEqual({ pais: "CZ", numero: "04788290" });
+    expect(nifComunitario("NL853695386B01", "NL")).toEqual({ pais: "NL", numero: "853695386B01" });
+    expect(nifComunitario("853695386B01", "NL")).toEqual({ pais: "NL", numero: "853695386B01" });
+    expect(nifComunitario("123456789", "GR")).toEqual({ pais: "EL", numero: "123456789" });
+    const s = modelo349(d, 2026, 1).find((x) => x.clave === "S")!;
+    expect(s).toMatchObject({ pais: "FI", numero: "26899624" });
   });
 });

@@ -29,6 +29,13 @@ export const env = {
   get appUrl() {
     return req("APP_URL").replace(/\/$/, "");
   },
+  /** Solo se cambia en las pruebas de integración (Telegram simulado). */
+  get telegramApiRoot() {
+    return (process.env.TELEGRAM_API_ROOT || "https://api.telegram.org").replace(/\/$/, "");
+  },
+  get openaiBaseUrl() {
+    return (process.env.OPENAI_BASE_URL || "https://api.openai.com/v1").replace(/\/$/, "");
+  },
   get openaiKey() {
     return process.env.OPENAI_API_KEY ?? null;
   },

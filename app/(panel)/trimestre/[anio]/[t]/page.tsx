@@ -102,7 +102,7 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
                   <td className="cas">{l.clave}</td>
                   <td>
                     {l.nombre}
-                    <div className="nota">{l.nif || "falta el VAT"}</div>
+                    <div className="nota">{l.numero ? `${l.pais ?? "¿país?"} · ${l.numero}` : "falta el VAT"}</div>
                   </td>
                   <td>{euros(l.base)}</td>
                 </tr>
