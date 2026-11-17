@@ -271,8 +271,9 @@ function crearBot(): Bot {
       await setMensaje("gastos", g.id, ctx.callbackQuery.message!.message_id);
       return;
     }
+    // Contestamos ya: leer el PDF con Claude puede tardar más que los ~15 s que da Telegram para responder la pulsación.
+    await ctx.answerCallbackQuery("Leyendo la factura…").catch(() => {});
     if (!g.archivo_path) {
-      await ctx.answerCallbackQuery({ text: "No se pudo registrar" });
       return ctx.editMessageText("⛔ No encuentro el archivo original: vuelve a mandármelo.");
     }
     try {
@@ -281,7 +282,6 @@ function crearBot(): Bot {
       const mime = MIME_POR_EXT[ext] ?? "application/pdf";
       const r = await prepararExterna({ bytes, mime, ext });
       await setEstado(id, "descartado");
-      await ctx.answerCallbackQuery();
       if (!r.ok) {
         await ctx.editMessageText(`🤔 ${r.duda}`);
         return;
@@ -289,7 +289,6 @@ function crearBot(): Bot {
       await ctx.editMessageText(textoExterna(r.factura, r.cliente, r.avisos), { reply_markup: tecladoExterna(r.factura.id) });
       await setMensaje("facturas", r.factura.id, ctx.callbackQuery.message!.message_id);
     } catch (e) {
-      await ctx.answerCallbackQuery({ text: "No se pudo registrar" });
       await ctx.reply(`⛔ No pude prepararla como factura:\n${e instanceof Error ? e.message : String(e)}\nVuelve a pulsar «Es mía».`);
     }
   });

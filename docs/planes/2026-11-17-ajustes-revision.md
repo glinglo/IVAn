@@ -176,3 +176,5 @@ Ejecutado por Claude Code el 17/11/2026, en rama `plan/ajustes-revision` desde `
 **Fuera del plan, aprobado por Jose:** `next build`/`next dev` creaban un `AGENTS.md` en la raíz (guía de Next 16 para agentes) que no estaba antes y rompía el «`git status` limpio» de este mismo plan. Añadido `agentRules: false` en `next.config.ts` (opción de Next 16 que evita que se cree, y quita su bloque si ya existiera). Comprobado: tras `npx next build` y tras arrancar y parar `npm run dev`, ya no aparece `AGENTS.md` y `git status` queda limpio sin tocar nada a mano; `npm run typecheck` y `npx next build` siguen bien. Va en un commit separado de los cuatro bloques del plan.
 
 Nada de lo anterior no encajó con el código ni hubo que parar: las cuatro decisiones del plan se aplicaron tal cual estaban escritas.
+
+Revisión de Claude: answerCallbackQuery al principio de p:venta.
