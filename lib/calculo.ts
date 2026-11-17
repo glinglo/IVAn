@@ -171,7 +171,7 @@ export function modelo130(d: DatosCalc, anio: number, t: number): Modelo130 {
 export interface Modelo303 {
   anio: number;
   t: number;
-  c01: number; c03: number; // régimen general 21 %
+  c07: number; c09: number; // régimen general 21 %
   c10: number; c11: number; // adquisiciones intracomunitarias de servicios (ISP UE)
   c12: number; c13: number; // otras operaciones con inversión del sujeto pasivo (fuera UE)
   c27: number; // total devengado
@@ -183,6 +183,7 @@ export interface Modelo303 {
   c120: number; // no sujetas por reglas de localización (clientes fuera UE)
   c110: number; // cuotas a compensar de periodos anteriores
   c78: number; // compensación aplicada
+  c87: number; // cuotas a compensar pendientes para periodos posteriores
   c71: number; // resultado (+ ingresar / − compensar o devolver)
   pendienteCompensar: number;
 }
@@ -193,13 +194,19 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
   const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
   const isp = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
 
-  const c01 = suma(fs.filter((f) => f.tipo === "nacional" && f.iva_pct === 21), (f) => f.base);
-  const c03 = suma(fs, (f) => f.iva);
+  const nacionales = fs.filter((f) => f.tipo === "nacional");
+  for (const f of nacionales) {
+    if (f.iva_pct !== 21) {
+      throw new Error(`Factura nacional con IVA al ${f.iva_pct} % (${f.fecha}): IVAn solo sabe meter el 21 % en las casillas 07/09.`);
+    }
+  }
+  const c07 = suma(nacionales, (f) => f.base);
+  const c09 = suma(nacionales, (f) => f.iva);
   const c10 = suma(isp("ISP UE"), (g) => g.base);
   const c11 = suma(isp("ISP UE"), (g) => round2(g.base * IVA_ISP));
   const c12 = suma(isp("ISP fuera UE"), (g) => g.base);
   const c13 = suma(isp("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
-  const c27 = round2(c03 + c11 + c13);
+  const c27 = round2(c09 + c11 + c13);
   const soportado = isp("IVA soportado");
   const c28 = round2(suma(soportado, (g) => g.base) + c12);
   const c29 = round2(suma(soportado, (g) => g.iva) + c13);
@@ -212,8 +219,9 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
   const c110 = t === 1 ? d.ivaCompensarInicial : modelo303(d, anio, t - 1).pendienteCompensar;
   const c78 = round2(Math.min(c110, Math.max(c46, 0)));
   const c71 = round2(c46 - c78);
+  const c87 = round2(c110 - c78);
   return {
-    anio, t, c01, c03, c10, c11, c12, c13, c27, c28, c29, c36, c37, c45, c46, c59, c120, c110, c78, c71,
+    anio, t, c07, c09, c10, c11, c12, c13, c27, c28, c29, c36, c37, c45, c46, c59, c120, c110, c78, c87, c71,
     pendienteCompensar: round2(c110 - c78 + Math.max(0, -c46)),
   };
 }

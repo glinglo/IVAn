@@ -47,8 +47,8 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
         <h2>Modelo 303 · IVA {estado("303")}</h2>
         <Tabla
           lineas={[
-            ["01", "Base al 21 %", m303.c01],
-            ["03", "Cuota al 21 %", m303.c03],
+            ["07", "Base al 21 %", m303.c07],
+            ["09", "Cuota al 21 %", m303.c09],
             ["10", "Base adquisiciones intracomunitarias", m303.c10],
             ["11", "Cuota adquisiciones intracomunitarias", m303.c11],
             ["12", "Base otras operaciones ISP", m303.c12],
@@ -64,6 +64,7 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
             ["120", "Operaciones no sujetas (fuera UE)", m303.c120],
             ["110", "Cuotas a compensar de periodos anteriores", m303.c110],
             ["78", "Cuotas a compensar aplicadas", m303.c78],
+            ["87", "Cuotas a compensar pendientes para periodos posteriores", m303.c87],
             ["71", m303.c71 >= 0 ? "Resultado: a ingresar" : "Resultado: a compensar", m303.c71, true],
           ]}
         />
