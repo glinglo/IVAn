@@ -1,0 +1,41 @@
+# Planes de IVAn
+
+Cómo trabajamos: **investigar → planificar → ejecutar**.
+
+| Fase | Quién | Dónde |
+|---|---|---|
+| Investigar | Claude (proyecto IVAn en claude.ai) | Fuentes oficiales (AEAT, BOE), la hoja de 2026, el código |
+| Planificar | Claude escribe el plan aquí; **Jose lo aprueba** | `docs/planes/AAAA-MM-DD-tema.md` |
+| Ejecutar | **Claude Code**, en `/Users/usuario/dev/IVAn` | El código, siguiendo el plan |
+| Revisar (opcional) | Claude, contra el plan | Notas al final del plan |
+
+Reglas:
+- Claude Code solo ejecuta planes con estado **Aprobado**. Si algo del plan no encaja con el código, para y lo apunta en «Notas de ejecución» en vez de improvisar.
+- Commit y push solo con el OK de Jose.
+- Al terminar, Claude Code cambia el estado a **Hecho** y rellena «Notas de ejecución» (qué hizo, qué cambió respecto al plan, cómo quedaron los tests).
+- Las cifras fiscales siempre con su fuente. Si una cifra o un plazo puede haber cambiado, se vuelve a comprobar antes de ejecutar.
+- `referencia/` guarda código de ejemplo. Sirve para orientarse, no es obligatorio usarlo.
+
+## Planes
+
+| Plan | Estado | Prioridad |
+|---|---|---|
+| [Revisión de las Fases 1 y 2](2026-11-17-revision-fases-1-2.md) | Aprobado | 1 |
+| [303: ventas al 21 % en las casillas 07/09](2026-11-17-303-casillas-07-09.md) | Aprobado | 2 (antes del 4T) |
+| [Modelo 390](2026-11-17-modelo-390.md) | Aprobado | 3 (antes del 4T) |
+
+## Plantilla
+
+```
+# Título
+Estado: Borrador | Aprobado | Aprobado | Hecho
+Fecha · Autor del plan
+
+## Por qué
+## Lo que se sabe (fuentes)
+## Alcance (sí / no)
+## Cambios, archivo por archivo
+## Cómo sabremos que está bien (tests y cifras esperadas)
+## Riesgos y dudas
+## Notas de ejecución (las rellena Claude Code)
+```

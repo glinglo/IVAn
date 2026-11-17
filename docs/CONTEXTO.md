@@ -13,6 +13,7 @@
 ## 2. Forma de trabajar
 
 - **Investigar → planificar → ejecutar.** No construir ni subir código sin un «dale» explícito de Jose.
+- **Reparto (decidido el 17/11/2026):** Claude, en el proyecto de claude.ai, investiga y planifica; los planes van en `docs/planes/` del repo (los leen Claude y Claude Code); Jose los aprueba; **Claude Code ejecuta** en `/Users/usuario/dev/IVAn`. Claude no escribe el código de la app.
 - Siempre en español, directo y sin jerga. A Jose le gustan las comparativas honestas (build vs buy, pros y contras).
 - Claude no presenta nada en Hacienda: prepara las casillas y Jose presenta.
 
@@ -106,9 +107,13 @@
 - Copia de seguridad cada 7 días desde el cron, `/copia` y `scripts/restaurar.ts` (probado: volcar → base vacía → restaurar → todo igual).
 - 27 tests y 47 conversaciones simuladas pasan.
 
+**Planes en `docs/planes/` (aprobados por Jose el 17/11/2026, para Claude Code):**
+- Las Fases 1 y 2 las escribió Claude desde claude.ai, sin plan; Jose decidió dejarlas como base. Plan: [revisión por Claude Code](planes/2026-11-17-revision-fases-1-2.md).
+- **303, casillas 07/09:** las ventas al 21 % van en **07 (base), 08 (tipo) y 09 (cuota)**; 01-03 son el 4 % (instrucciones oficiales del 303 de 2026). IVAn las muestra como 01/03 en el panel, el Excel y el bot. Los 303 de 1T a 3T los presentó la gestoría, así que no hay nada mal presentado. Hay que corregirlo antes del 4T. La hoja de Claude tiene el mismo rótulo (Trimestres, filas 12 y 13): la corrige Claude con el OK de Jose.
+- **Modelo 390:** investigación hecha, con las casillas comprobadas con las fuentes oficiales y las cifras esperadas (con los datos hasta octubre, 86 = 207,46 € y 108 = 29.460 €). La Orden HAC/27/2026 no afecta a Jose. Hay una implementación de referencia en `docs/planes/referencia/303-y-390.patch` (no aplicada).
+
 **Falta:**
 - Puesta en marcha real (cuentas y claves de Jose) y prueba con su Telegram, con Claude de verdad: las pruebas simulan sus respuestas, así que falta ver cómo lee los PDF reales de Selfconta y de gastos.
-- Cálculo de las casillas del 390.
 
 **Datos pendientes de Jose:**
 - PDF de la factura 00336 (dirección de Zapflow) y dirección fiscal de Volta Cultural.
@@ -121,6 +126,6 @@
 
 1. **Fase 1 · Prueba en local** (hecha el 17/11/2026).
 2. **Fase 2 · Puesta en marcha** (24-29/11): código del modo paralelo y de la copia hecho; falta que Jose cree las cuentas (Supabase en la UE, Vercel, claves con límite de gasto) siguiendo `docs/PUESTA_EN_MARCHA.md` y probarlo con su Telegram.
-3. **Fase 3 · Paralelo** (noviembre y diciembre): registrar 00337 y 00338 de Selfconta, gastos en los dos sitios, comparar; añadir el 390; hablar con la gestoría.
+3. **Fase 3 · Paralelo** (noviembre y diciembre): registrar 00337 y 00338 de Selfconta, gastos en los dos sitios, comparar; hablar con la gestoría. Ejecutar los planes del 303 y del 390.
 4. **Fase 4 · Cierre del 4T** (enero de 2027): 303, 130, 349 y 390 con casillas, comparados con la hoja (y con los de la gestoría si los presenta). Plazo: lunes 1/02/2027; domiciliación hacia el 25-27/01 (fecha oficial pendiente). 00339 = primera factura real de IVAn.
 5. **2027:** Verifactu antes del 1/07/2027 (vigente según el BOE; se habla de retrasarlo a 2028, revisar en primavera), resumen para la Renta 2026, WhatsApp si encaja.
