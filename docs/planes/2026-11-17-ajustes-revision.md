@@ -1,6 +1,6 @@
 # Ajustes tras la revisión de las Fases 1 y 2
 
-Estado: Aprobado (Jose, 17/11/2026)
+Estado: Hecho
 17/11/2026 · Plan de Claude (proyecto IVAn)
 
 **Fecha límite: 30/11/2026**, antes de registrar la 00337 de Selfconta. Mejor antes del 24/11, cuando empieza la puesta en marcha en Supabase: así la migración 003 entra ya corregida.
@@ -152,4 +152,29 @@ En el Mac de Jose:
 - **Si la conversación «00342» sigue fallando** con la espera activa, no es un fallo en cascada: parar y apuntarlo en las notas, sin tocar la app.
 - **Si Jose aplica la 003 en Supabase antes de que se ejecute este plan**: volver a aplicarla después (todo es `create or replace`). Mejor ejecutar el plan antes del 24/11.
 
-## Notas de ejecución (las rellena Claude Code)
+## Notas de ejecución
+
+Ejecutado por Claude Code el 17/11/2026, en rama `plan/ajustes-revision` desde `wip/v0`. Los cuatro bloques, en el orden pedido:
+
+**2. Orden de bloqueo en la 003.** `emitir_factura()` ahora bloquea `ajustes` primero (`select ... for update` en vez de `select` sin bloqueo), igual que `registrar_factura_externa()`, con un comentario explicando el orden. Sin más cambios: mensajes de error y resultado iguales. La 003 se aplicó sin errores sobre una base con la 001 (`reset-db.sh`).
+
+**4. Espera activa en la integración.** Añadida `esperarPostgrest(db, maxMs = 60_000)` en `scripts/integracion/conversaciones.ts` (consulta `ajustes` cada 500 ms, imprime cuánto tardó, lanza error claro a los 60 s), usada en «La copia se restaura en una base vacía». `arrancar.sh` cambia `sleep 1 && curl` por un bucle de hasta 30 s. Añadida la línea en `docs/PUESTA_EN_MARCHA.md`. En esta máquina (Postgres de pruebas efímero, no el de Jose) PostgREST tardó **~1.0-1.05 s** en volver (1028 ms y 1045 ms en las dos pasadas), muy por debajo de los 15-20 s que ve Jose; la espera activa cubre ambos casos igual.
+
+**3. `tsconfig.json`.** Ejecutado `npx next build`: cambió exactamente lo previsto (`jsx: "react-jsx"`, añade `.next/dev/types/**/*.ts` a `include`, reformatea a un elemento por línea) y nada más. Comprobado con el hash del archivo que ni un segundo `next build` ni un `npm run dev` (arrancado y parado) lo vuelven a tocar. Guardado tal cual lo deja Next.
+
+**1. Pregunta con dos botones.** `lib/externas.ts`: nueva `pistasDePropia(x, ajustes, clientes)` (pura, sin acceso a la base), con las tres pistas del plan (nombre con comparación normalizada ≥2 palabras de 3+ letras, o 1 si el nombre solo tiene una; número = siguiente de la serie; cliente por NIF del destinatario, descartando el propio). `lib/bot.ts`: en `procesarArchivo`, cuando `esPropia` es falso se calculan las pistas; sin pistas sigue el flujo de gasto de siempre, con pistas se manda la pregunta (`textoPregunta`/`tecladoPregunta`, sin `setMensaje`) con los botones `p:venta:<id>` y `p:gasto:<id>`. Nuevo `b.callbackQuery(/^p:(venta|gasto):(.+)$/)`: `gasto` edita a borrador de gasto normal (con `setMensaje` ahí sí, para que responder lo corrija); `venta` descarga el archivo guardado, deduce el tipo por la extensión y llama a `prepararExterna`; el gasto pasa a `descartado` solo si `prepararExterna` responde (ok o duda), nunca si lanza una excepción (ahí se avisa de reintentar y el gasto queda como estaba).
+
+**Tests.** `tests/externas.test.ts`: `it("detecta pistas de factura propia")` con los casos del plan (28 tests en total, 27 → 28). `scripts/integracion/conversaciones.ts`: las dos conversaciones nuevas después de «Cliente desconocido: pide darlo de alta» («NIF mal leído: pregunta y, con "Es mía", la prepara como venta» y «...con "Es un gasto" sigue como gasto»), con el PDF de NIF `ES00000008T`, número `00342` y cliente `FI26899624`. Ningún otro gasto de la prueba disparó la pregunta.
+
+**Cómo quedaron los tests (en esta máquina, con un Postgres de pruebas efímero levantado para la ocasión y parado al terminar):**
+- `npm test`: 28/28.
+- `npm run typecheck`: sin errores.
+- `npx next build`: correcto; `git status` no mostró `tsconfig.json` modificado más allá del cambio ya hecho, ni tras un segundo build ni tras `npm run dev` (arrancado y parado).
+- Integración (`reset-db.sh` → `arrancar.sh` → `conversaciones.ts`): **49/49 en dos pasadas seguidas**. La conversación «00342» (Al quitar el modo paralelo IVAn sigue la numeración) pasó las dos veces, sin fallo en cascada.
+- «Dos ✅ a la vez emiten una sola factura» y toda la numeración 00337-00342 siguen pasando con el nuevo orden de bloqueo.
+
+**Fuera del plan, aprobado por Jose:** `next build`/`next dev` creaban un `AGENTS.md` en la raíz (guía de Next 16 para agentes) que no estaba antes y rompía el «`git status` limpio» de este mismo plan. Añadido `agentRules: false` en `next.config.ts` (opción de Next 16 que evita que se cree, y quita su bloque si ya existiera). Comprobado: tras `npx next build` y tras arrancar y parar `npm run dev`, ya no aparece `AGENTS.md` y `git status` queda limpio sin tocar nada a mano; `npm run typecheck` y `npx next build` siguen bien. Va en un commit separado de los cuatro bloques del plan.
+
+Nada de lo anterior no encajó con el código ni hubo que parar: las cuatro decisiones del plan se aplicaron tal cual estaban escritas.
+
+Revisión de Claude: answerCallbackQuery al principio de p:venta.

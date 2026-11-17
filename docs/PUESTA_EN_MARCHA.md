@@ -83,5 +83,7 @@ Los PDF de las facturas de IVAn se regeneran al pedirlos; los originales de gast
 npm test                                         # reglas fiscales y cálculo
 scripts/integracion/reset-db.sh                  # Postgres local en :54322
 POSTGREST_BIN=… scripts/integracion/arrancar.sh  # PostgREST en :3001
-npx tsx scripts/integracion/conversaciones.ts    # 47 conversaciones simuladas
+npx tsx scripts/integracion/conversaciones.ts    # 49 conversaciones simuladas
 ```
+
+La restauración de la copia puede tardar unos 20 s: borra la base y espera a que PostgREST se reconecte solo.
