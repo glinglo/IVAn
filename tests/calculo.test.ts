@@ -29,7 +29,8 @@ describe("Hoja de cálculo (cuota 452 €/mes)", () => {
   it("303 por trimestre", () => {
     expect([1, 2, 3, 4].map((t) => modelo303(d, 2026, t).c71)).toEqual([-2.42, -0.42, 207.46, 0]);
     const t3 = modelo303(d, 2026, 3);
-    expect(t3).toMatchObject({ c01: 1020, c03: 214.2, c10: 76.2, c11: 15.99, c12: 154.73, c13: 32.5, c59: 7560, c110: 2.84 });
+    expect(t3).toMatchObject({ c07: 1020, c09: 214.2, c10: 76.2, c11: 15.99, c12: 154.73, c13: 32.5, c27: 262.69, c59: 7560, c110: 2.84 });
+    expect(modelo303(d, 2026, 2).c87).toBe(2.42);
   });
   it("130 por trimestre", () => {
     expect([1, 2, 3, 4].map((t) => modelo130(d, 2026, t).aIngresar)).toEqual([1216.02, 1272.9, 1141.5, 277.03]);

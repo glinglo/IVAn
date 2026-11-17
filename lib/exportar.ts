@@ -55,8 +55,8 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
   const fila = (casilla: string, f: (x: (typeof r)[number]) => number) =>
     tri.addRow({ casilla, t1: f(r[0]), t2: f(r[1]), t3: f(r[2]), t4: f(r[3]) });
   tri.addRow({ casilla: "MODELO 303 · IVA" }).font = { bold: true };
-  fila("[01] Base 21 %", (x) => x.m303.c01);
-  fila("[03] Cuota 21 %", (x) => x.m303.c03);
+  fila("[07] Base 21 %", (x) => x.m303.c07);
+  fila("[09] Cuota 21 %", (x) => x.m303.c09);
   fila("[10] Base adquisiciones intracomunitarias (ISP)", (x) => x.m303.c10);
   fila("[11] Cuota", (x) => x.m303.c11);
   fila("[12] Base otras ISP (fuera UE)", (x) => x.m303.c12);
@@ -72,6 +72,7 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
   fila("[120] No sujetas (fuera UE)", (x) => x.m303.c120);
   fila("[110] A compensar de periodos anteriores", (x) => x.m303.c110);
   fila("[78] Compensación aplicada", (x) => x.m303.c78);
+  fila("[87] A compensar en periodos posteriores", (x) => x.m303.c87);
   fila("[71] RESULTADO 303", (x) => x.m303.c71).font = { bold: true };
   tri.addRow({});
   tri.addRow({ casilla: "MODELO 130 · IRPF (acumulado)" }).font = { bold: true };
