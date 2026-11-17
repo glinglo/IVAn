@@ -109,7 +109,7 @@
 
 **Planes en `docs/planes/` (aprobados por Jose el 17/11/2026, para Claude Code):**
 - Las Fases 1 y 2 las escribió Claude desde claude.ai, sin plan; Jose decidió dejarlas como base. Plan: [revisión por Claude Code](planes/2026-11-17-revision-fases-1-2.md).
-- **303, casillas 07/09:** las ventas al 21 % van en **07 (base), 08 (tipo) y 09 (cuota)**; 01-03 son el 4 % (instrucciones oficiales del 303 de 2026). IVAn las muestra como 01/03 en el panel, el Excel y el bot. Los 303 de 1T a 3T los presentó la gestoría, así que no hay nada mal presentado. Hay que corregirlo antes del 4T. La hoja de Claude tiene el mismo rótulo (Trimestres, filas 12 y 13): la corrige Claude con el OK de Jose.
+- **303, casillas 07/09:** las ventas al 21 % van en **07 (base), 08 (tipo) y 09 (cuota)**; 01-03 son el 4 % (instrucciones oficiales del 303 de 2026). IVAn las muestra como 01/03 en el panel, el Excel y el bot. Los 303 de 1T a 3T los presentó la gestoría, así que no hay nada mal presentado. Hay que corregirlo antes del 4T. En la hoja de Claude ya está corregido (Trimestres, filas 12 y 13 → [07] y [09], el 17/11/2026).
 - **Modelo 390:** investigación hecha, con las casillas comprobadas con las fuentes oficiales y las cifras esperadas (con los datos hasta octubre, 86 = 207,46 € y 108 = 29.460 €). La Orden HAC/27/2026 no afecta a Jose. Hay una implementación de referencia en `docs/planes/referencia/303-y-390.patch` (no aplicada).
 
 **Falta:**
