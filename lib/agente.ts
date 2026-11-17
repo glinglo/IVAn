@@ -8,6 +8,7 @@ import { db } from "./db";
 import { env } from "./env";
 import { hoyMadrid, rangoTrimestre, round2, trimestreDe } from "./fiscal";
 import { cargarLibro, contextoPasos, pygHasta, resumenTrimestre, siguientesPasos } from "./libro";
+import { modelo390 } from "./calculo";
 import { prepararBorrador } from "./facturacion";
 import { enlacePanel } from "./sesion";
 import type { Cliente, Factura } from "./db";
@@ -28,6 +29,7 @@ Reglas:
 - Los gastos se registran mandando la foto o el PDF de la factura; si te los describe, pídele el documento.
 - Tú no presentas nada en Hacienda: Jose presenta en la Sede de la AEAT con Cl@ve y luego te lo dice (marcar_presentado).
 - Clientes UE (Zapflow, Finlandia): sin IVA, inversión del sujeto pasivo, van al 349. Clientes españoles: 21 % de IVA y 15 % de retención.
+- El 390 (resumen anual de IVA) es la suma de los cuatro 303 y se presenta con el del 4T: usa resumen_390.
 - Si algo es una duda fiscal que no puedes resolver con seguridad, dilo y sugiere consultarlo.`;
 
 const herramientas: Anthropic.Tool[] = [
@@ -47,6 +49,11 @@ const herramientas: Anthropic.Tool[] = [
       type: "object",
       properties: { anio: { type: "integer" }, trimestre: { type: "integer", minimum: 1, maximum: 4 } },
     },
+  },
+  {
+    name: "resumen_390",
+    description: "Casillas del modelo 390 (resumen anual de IVA) de un año. Se presenta con el 303 del 4T.",
+    input_schema: { type: "object", properties: { anio: { type: "integer" } } },
   },
   {
     name: "listar",
@@ -144,6 +151,18 @@ async function ejecutar(nombre: string, e: Entrada, acciones: Acciones): Promise
         (g) => (!t || trimestreDe(g.fecha).t === t) && (!txt || `${g.proveedor} ${g.concepto}`.toLowerCase().includes(txt)),
       );
       return { total_base: round2(xs.reduce((s, g) => s + g.base, 0)), n: xs.length, gastos: xs.slice(0, 30).map(({ fecha, proveedor, concepto, tipo, base, iva }) => ({ fecha, proveedor, concepto, tipo, base, iva })) };
+    }
+    case "resumen_390": {
+      const anio = Number(e.anio ?? (trimestreDe(hoy).t === 1 ? anioHoy - 1 : anioHoy));
+      const libro = await cargarLibro(anio);
+      const m = modelo390(libro.datos, anio);
+      const { trimestres: _t, ...casillas } = m;
+      return {
+        anio,
+        provisional: hoy <= `${anio}-12-31`,
+        enlace_panel: enlacePanel(`/anual/${anio}`),
+        casillas,
+      };
     }
     case "siguientes_pasos":
       return siguientesPasos(await contextoPasos(hoy)).map(({ texto, detalle, nivel }) => ({ texto, detalle, nivel }));

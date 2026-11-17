@@ -2,24 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cargarLibro, resumenTrimestre } from "@/lib/libro";
 import { euros, fechaES, plazoTrimestral } from "@/lib/fiscal";
-
-type Linea = [string, string, number, boolean?];
-
-function Tabla({ lineas }: { lineas: Linea[] }) {
-  return (
-    <table className="tabla">
-      <tbody>
-        {lineas.map(([cas, txt, v, res]) => (
-          <tr key={cas + txt} className={res ? "res" : v === 0 ? "cero" : ""}>
-            <td className="cas">{cas}</td>
-            <td>{txt}</td>
-            <td>{euros(v)}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
+import { Tabla } from "@/components/Casillas";
 
 export default async function Trimestre({ params }: { params: Promise<{ anio: string; t: string }> }) {
   const { anio: a, t: tt } = await params;
@@ -112,6 +95,16 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
           </table>
         )}
       </section>
+
+      {t === 4 ? (
+        <section className="card">
+          <h2>Modelo 390 · resumen anual de IVA</h2>
+          <p className="nota">Se presenta en el mismo plazo que el 303 del 4T.</p>
+          <p>
+            <Link href={`/anual/${anio}`}>Ver las casillas del 390 de {anio} ›</Link>
+          </p>
+        </section>
+      ) : null}
     </>
   );
 }

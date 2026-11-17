@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { cargarLibro, resumenTrimestre } from "./libro";
-import { pyg } from "./calculo";
+import { modelo390, pyg } from "./calculo";
 import { rangoTrimestre } from "./fiscal";
 
 const EUR = '#,##0.00 "€"';
@@ -99,6 +99,37 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
     ["Rendimiento neto", p.rendimientoNeto],
     ["Retenciones soportadas", p.retenciones],
   ].forEach(([c, v]) => pl.addRow({ c, v }));
+
+  // 390: si algún gasto tiene un IVA que el cálculo no contempla, la hoja lo dice en vez de fallar.
+  const r390 = hoja(wb, "390", [
+    { header: "Casilla", key: "c", width: 8 },
+    { header: "Concepto", key: "t", width: 62 },
+    { header: "Importe", key: "v", width: 14, eur: true },
+  ]);
+  try {
+    const m = modelo390(libro.datos, anio);
+    ([
+      ["05", "Régimen ordinario 21 %: base", m.c05], ["06", "Régimen ordinario 21 %: cuota", m.c06],
+      ["551", "Adquisiciones intracomunitarias de servicios 21 %: base", m.c551], ["552", "… cuota", m.c552],
+      ["27", "Otros supuestos de inversión del sujeto pasivo: base", m.c27], ["28", "… cuota", m.c28],
+      ["33", "Total bases IVA", m.c33], ["34", "Total cuotas IVA", m.c34], ["47", "Total cuotas IVA y recargo", m.c47],
+      ["190", "Deducible interiores corrientes 4 %: base", m.c190], ["191", "… cuota", m.c191],
+      ["603", "Deducible interiores corrientes 10 %: base", m.c603], ["604", "… cuota", m.c604],
+      ["605", "Deducible interiores corrientes 21 %: base", m.c605], ["606", "… cuota", m.c606],
+      ["48", "Total interiores corrientes: base", m.c48], ["49", "… cuota", m.c49],
+      ["637", "Deducible adquisiciones intracomunitarias de servicios 21 %: base", m.c637], ["638", "… cuota", m.c638],
+      ["597", "Total adquisiciones intracomunitarias de servicios: base", m.c597], ["598", "… cuota", m.c598],
+      ["64", "Suma de deducciones", m.c64], ["65", "Resultado régimen general", m.c65],
+      ["84", "Suma de resultados", m.c84], ["85", "Compensación de cuotas del ejercicio anterior", m.c85],
+      ["86", "Resultado de la liquidación", m.c86],
+      ["95", "Total a ingresar en las autoliquidaciones", m.c95], ["97", "Último periodo: a compensar", m.c97],
+      ["98", "Último periodo: a devolver", m.c98], ["662", "Cuotas pendientes generadas en el ejercicio", m.c662],
+      ["99", "Operaciones en régimen general", m.c99], ["103", "Entregas intracomunitarias de bienes y servicios", m.c103],
+      ["110", "No sujetas por reglas de localización", m.c110], ["108", "Total volumen de operaciones", m.c108],
+    ] as [string, string, number][]).forEach(([c, t, v]) => r390.addRow({ c, t, v }));
+  } catch (e) {
+    r390.addRow({ c: "", t: `No se puede calcular: ${e instanceof Error ? e.message : String(e)}` });
+  }
 
   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
 }

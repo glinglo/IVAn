@@ -22,7 +22,7 @@ Reglas:
 |---|---|---|
 | [Revisión de las Fases 1 y 2](2026-11-17-revision-fases-1-2.md) | Hecho | 1 |
 | [303: ventas al 21 % en las casillas 07/09](2026-11-17-303-casillas-07-09.md) | Hecho | 2 (antes del 4T) |
-| [Modelo 390](2026-11-17-modelo-390.md) | Aprobado | 3 (antes del 4T) |
+| [Modelo 390](2026-11-17-modelo-390.md) | Hecho | 3 (antes del 4T) |
 | [Ajustes tras la revisión](2026-11-17-ajustes-revision.md) | Hecho | 1 (antes del 30/11) |
 
 ## Plantilla

@@ -168,6 +168,23 @@ async function main() {
     assert.equal(r.m130.a_ingresar, 1141.5);
   });
 
+  await caso("«¿Y el 390?» da las casillas del resumen anual y cuadra con los 303", async () => {
+    let r: any;
+    F.guionClaude.push(agente(usar("resumen_390", { anio: 2026 })), (p) => {
+      r = JSON.parse(p.messages.at(-1).content[0].content);
+      return [texto("ok")];
+    });
+    await mensaje("¿cómo queda el 390?");
+    assert.equal(r.casillas.c86, 207.46);
+    assert.equal(r.casillas.c108, 29460);
+    assert.equal(r.casillas.cuadra, true);
+    assert.equal(r.provisional, true);
+    assert.match(r.enlace_panel, /\/acceso\?t=.+&ir=%2Fanual%2F2026$/);
+    // historial para el caso siguiente
+    F.guionClaude.push((p) => [texto("ok")]);
+    await mensaje("¿cómo va el trimestre?");
+  });
+
   await caso("La segunda consulta lleva el historial de la primera", async () => {
     let p: any;
     F.guionClaude.push((x) => {
@@ -403,6 +420,13 @@ async function main() {
     const d = enviados("sendDocument").at(-1);
     assert.equal(d?.archivo?.nombre, "IVAn-2026.xlsx");
     assert.equal(d!.archivo!.bytes.subarray(0, 2).toString(), "PK");
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(d!.archivo!.bytes as any);
+    const h = wb.getWorksheet("390");
+    assert.ok(h, "falta la hoja 390");
+    const fila108 = h!.getRows(2, h!.rowCount - 1)!.find((r) => r.getCell(1).value === "108");
+    assert.ok(fila108, "falta la casilla 108");
   });
 
   await caso("/ajustes enseña los datos y el último número", async () => {
