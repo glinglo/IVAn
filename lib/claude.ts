@@ -80,7 +80,8 @@ const sistemaGasto = (nif: string) =>
   `Lees facturas de gasto de un autónomo español (NIF ${nif}) para su libro de gastos. ` +
   `Extrae los datos exactamente como aparecen; no inventes. Si la factura muestra solo el total con IVA, ` +
   `calcula base = total - iva. Si cobra "VAT" de otro país o IVA español, ponlo en iva. ` +
-  `Si es una suscripción en USD u otra moneda, deja los importes en esa moneda.`;
+  `Si es una suscripción en USD u otra moneda, deja los importes en esa moneda. ` +
+  `Si el EMISOR es el propio autónomo (NIF ${nif}), es una factura que ha emitido él: pon su NIF en nif_proveedor.`;
 
 export async function extraerGasto(
   archivo: { bytes: Uint8Array; mime: string },
@@ -119,6 +120,60 @@ export async function corregirGasto(actual: GastoExtraido, correccion: string, n
     ],
     tool: { name: "guardar_gasto", description: "Datos corregidos", schema: esquemaGasto },
     validar: GastoExtraido,
+  });
+}
+
+// ---------- Facturas emitidas en otro programa (modo paralelo) ----------
+
+export const FacturaEmitidaExtraida = z.object({
+  numero: z.string().nullable(),
+  fecha: z.string().nullable(),
+  cliente_nombre: z.string().nullable(),
+  cliente_nif: z.string().nullable(),
+  concepto: z.string().nullable(),
+  base: z.number().nullable(),
+  iva_pct: z.number(),
+  iva: z.number(),
+  retencion_pct: z.number(),
+  retencion: z.number(),
+  total: z.number().nullable(),
+});
+export type FacturaEmitidaExtraida = z.infer<typeof FacturaEmitidaExtraida>;
+
+/** Lee una factura que el autónomo ha emitido con otro programa (p. ej. Selfconta). */
+export async function extraerFacturaEmitida(archivo: { bytes: Uint8Array; mime: string }, nifPropio: string) {
+  const data = Buffer.from(archivo.bytes).toString("base64");
+  const bloque: Anthropic.ContentBlockParam =
+    archivo.mime === "application/pdf"
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data } }
+      : { type: "image", source: { type: "base64", media_type: archivo.mime as "image/jpeg" | "image/png" | "image/webp", data } };
+  return llamar({
+    system:
+      `Lees facturas EMITIDAS por un autónomo español (NIF ${nifPropio}) con otro programa, para registrarlas en su libro. ` +
+      "Extrae los datos exactamente como aparecen; no inventes ni recalcules. Importes en euros.",
+    content: [bloque, { type: "text", text: "Extrae los datos de esta factura emitida." }],
+    tool: {
+      name: "registrar_factura_emitida",
+      description: "Datos de la factura emitida",
+      schema: {
+        type: "object",
+        properties: {
+          numero: { type: ["string", "null"], description: "Número de factura tal cual (p. ej. 00337)" },
+          fecha: { type: ["string", "null"], description: "Fecha de expedición, YYYY-MM-DD" },
+          cliente_nombre: { type: ["string", "null"] },
+          cliente_nif: { type: ["string", "null"], description: "NIF/VAT del cliente tal cual aparece" },
+          concepto: { type: ["string", "null"], description: "Concepto tal cual aparece (si hay varias líneas, únelas)" },
+          base: { type: ["number", "null"], description: "Base imponible" },
+          iva_pct: { type: "number", description: "Tipo de IVA en %; 0 si no lleva" },
+          iva: { type: "number", description: "Cuota de IVA; 0 si no lleva" },
+          retencion_pct: { type: "number", description: "Retención de IRPF en %; 0 si no lleva" },
+          retencion: { type: "number", description: "Importe retenido (positivo); 0 si no lleva" },
+          total: { type: ["number", "null"], description: "Total a pagar" },
+        },
+        required: Object.keys(FacturaEmitidaExtraida.shape),
+      },
+    },
+    validar: FacturaEmitidaExtraida,
   });
 }
 

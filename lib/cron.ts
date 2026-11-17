@@ -1,4 +1,5 @@
-import { db } from "./db";
+import { db, getAjustes } from "./db";
+import { modoParalelo } from "./externas";
 import { euros, hoyMadrid, rangoTrimestre, sumarDias } from "./fiscal";
 import { avisosDeHoy, type Aviso } from "./recordatorios";
 
@@ -43,8 +44,12 @@ export async function ejecutarRecordatorios(
   const { data } = await db().from("recordatorios_enviados").select("clave");
   const enviados = new Set((data ?? []).map((r) => r.clave as string));
   const avisos = avisosDeHoy(hoy, enviados);
+  const paralelo = avisos.some((a) => a.tipo === "facturar") && modoParalelo(await getAjustes(), hoy);
   for (const a of avisos) {
     let texto = a.texto;
+    if (a.tipo === "facturar" && paralelo) {
+      texto = "🧾 Fin de mes. ¿Toca facturar? Hazla en Selfconta y mándame el PDF: la registro con su número.";
+    }
     if (a.trimestre) texto += await resumenTrimestre(a.trimestre.anio, a.trimestre.t);
     if (a.tipo === "facturar") {
       const pendientes = await clientesSinFacturar(hoy);

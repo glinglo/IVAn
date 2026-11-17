@@ -6,6 +6,7 @@ import { db, getAjustes, getClientes, nums, subirArchivo, descargarArchivo, type
 import { calcularImportes, hoyMadrid } from "./fiscal";
 import { interpretarFactura } from "./claude";
 import { generarFacturaPDF } from "./pdf";
+import { modoParalelo, textoModoParalelo } from "./externas";
 
 const NUMERICOS: (keyof Factura)[] = ["base", "iva_pct", "iva", "retencion_pct", "retencion", "total"];
 
@@ -14,6 +15,7 @@ export async function getFactura(id: string): Promise<Factura | null> {
   return data ? nums(data as Factura, NUMERICOS) : null;
 }
 
+/** Borrador (de IVAn o de registro de una externa) asociado a un mensaje del bot. */
 export async function facturaPorMensaje(messageId: number): Promise<Factura | null> {
   const { data } = await db()
     .from("facturas")
@@ -82,6 +84,7 @@ export async function comprobarAntesDeEmitir(f: Factura) {
   const cliente = clientes.find((c) => c.id === f.cliente_id);
   const bloqueos: string[] = [];
   const avisos: string[] = [];
+  if (modoParalelo(ajustes)) bloqueos.push(textoModoParalelo(ajustes));
   if (!cliente) bloqueos.push("El cliente ya no existe.");
   else {
     if (!cliente.direccion) bloqueos.push(`Falta la dirección de ${cliente.nombre}: /cliente ${cliente.nombre} direccion: ...`);

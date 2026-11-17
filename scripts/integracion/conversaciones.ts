@@ -3,6 +3,8 @@
 //
 //   1. ./reset-db.sh   2. ./arrancar.sh   3. npx tsx scripts/integracion/conversaciones.ts
 import assert from "node:assert/strict";
+import { execSync } from "node:child_process";
+import { gunzipSync } from "node:zlib";
 import * as F from "./fakes";
 
 const JOSE = 12345;
@@ -428,6 +430,186 @@ async function main() {
     });
     await mensaje("lista mis facturas");
     assert.equal(r.n, 14);
+  });
+
+
+  // ===== Fase 2: modo paralelo con Selfconta =====
+
+  await caso("/ajustes emitir_desde activa el modo paralelo", async () => {
+    await mensaje("/ajustes emitir_desde: 2099-01-01");
+    assert.match(ultimoTexto(), /Modo paralelo hasta el 01\/01\/2099/);
+    await mensaje("/ajustes");
+    assert.match(ultimoTexto(), /Modo paralelo: hasta el 01\/01\/2099/);
+  });
+
+  await caso("En modo paralelo IVAn no emite (ni el bot ni la base de datos)", async () => {
+    await db().from("facturas").delete().eq("estado", "borrador");
+    F.guionClaude.push(forzada("preparar_factura", { ...peticionNoviembre, base: 77, concepto: "paralelo" }));
+    await mensaje("/factura Zapflow 77");
+    assert.match(String(ultimoConBotones().params.text), /⛔ Modo paralelo hasta el 01\/01\/2099/);
+    const [b] = await borradores();
+    await pulsar(`f:ok:${b.id}`, await idMensajeFactura(b.id));
+    assert.match(ultimoTexto(), /No la he emitido/);
+    const rpc = await db().rpc("emitir_factura", { p_factura_id: b.id });
+    assert.match(String(rpc.error?.message), /Modo paralelo/);
+    assert.equal((await ajustes()).ultimo_numero, 339);
+    await db().from("facturas").delete().eq("id", b.id);
+  });
+
+  const pdfSelfconta = (fileId: string) => {
+    F.archivosTelegram.set(fileId, Buffer.from(`%PDF-1.4 selfconta ${fileId}`));
+    return { text: undefined, document: { file_id: fileId, file_unique_id: fileId, mime_type: "application/pdf", file_name: `${fileId}.pdf` } };
+  };
+  const leidaComoPropia = forzada("guardar_gasto", {
+    es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000000T", pais: "ES", numero_factura: "00340",
+    fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3060, iva: 0, total: 3060, nif_destinatario: "FI26899624", notas: null,
+  });
+  const emitida = (extra: Record<string, unknown> = {}) =>
+    forzada("registrar_factura_emitida", {
+      numero: "340", fecha: "2026-11-16", cliente_nombre: "Zapflow Oy", cliente_nif: "FI 26899624",
+      concepto: "UX services for Zapflow platform (November 2026) + Cursor subscription",
+      base: 3060, iva_pct: 0, iva: 0, retencion_pct: 0, retencion: 0, total: 3060, ...extra,
+    });
+
+  let externaId = "";
+  await caso("El PDF de una factura propia de Selfconta se prepara para registrar, no como gasto", async () => {
+    const gastosAntes = (await db().from("gastos").select("id")).data!.length;
+    F.guionClaude.push(leidaComoPropia, emitida());
+    await mensaje("", pdfSelfconta("sc340"));
+    const m = ultimoConBotones();
+    assert.match(String(m.params.text), /📥 Factura tuya hecha fuera de IVAn · 00340/);
+    assert.match(JSON.stringify(m.params.reply_markup), /x:ok:/);
+    assert.equal((await db().from("gastos").select("id")).data!.length, gastosAntes, "no debe crear un gasto");
+    const b = (await db().from("facturas").select("*").eq("origen", "externa").eq("estado", "borrador").single()).data!;
+    externaId = b.id;
+    assert.equal(b.numero, null);
+    assert.equal(b.numero_externo, "00340");
+    assert.ok([...F.storage.keys()].some((k) => k.includes("facturas/2026/externas/00340-")), "guarda el PDF original");
+    assert.ok(F.telegram.some((t) => t.metodo === "deleteMessage"));
+  });
+
+  await caso("Responder a una factura de Selfconta explica que se registra tal cual", async () => {
+    await responderA(await idMensajeFactura(externaId), "la base es 3000");
+    assert.match(ultimoTexto(), /se registran tal cual/);
+  });
+
+  await caso("✅ Registrar la apunta con su número y mueve el contador", async () => {
+    await pulsar(`x:ok:${externaId}`, await idMensajeFactura(externaId));
+    const f = (await db().from("facturas").select("*").eq("id", externaId).single()).data!;
+    assert.equal(f.numero, "00340");
+    assert.equal(f.estado, "emitida");
+    assert.equal(f.origen, "externa");
+    assert.equal((await ajustes()).ultimo_numero, 340);
+    assert.ok(F.telegram.some((t) => t.metodo === "editMessageText" && /00340 registrada/.test(String(t.params.text))));
+    await mensaje("/pdf 00340");
+    assert.match(enviados("sendDocument").at(-1)!.archivo!.bytes.toString(), /selfconta sc340/, "devuelve el PDF original");
+  });
+
+  await caso("La misma factura otra vez: ya está en el libro", async () => {
+    F.guionClaude.push(leidaComoPropia, emitida());
+    await mensaje("", pdfSelfconta("sc340b"));
+    assert.match(ultimoTexto(), /La 00340 ya está en el libro/);
+  });
+
+  await caso("Saltarse un número avisa y no deja registrar", async () => {
+    F.guionClaude.push(leidaComoPropia, emitida({ numero: "00342" }));
+    await mensaje("", pdfSelfconta("sc342"));
+    assert.match(String(ultimoConBotones().params.text), /Toca la 00341 y esta es la 00342/);
+    const b = (await db().from("facturas").select("id").eq("numero_externo", "00342").single()).data!;
+    await pulsar(`x:ok:${b.id}`, await idMensajeFactura(b.id));
+    assert.match(ultimoTexto(), /No la he registrado:\nToca registrar la 00341 \(la última es la 00340\)/);
+    assert.equal((await ajustes()).ultimo_numero, 340);
+    await pulsar(`x:no:${b.id}`, await idMensajeFactura(b.id));
+    assert.equal((await db().from("facturas").select("id").eq("id", b.id)).data!.length, 0);
+  });
+
+  await caso("Volta sin retención: avisa de que los importes no son los esperados", async () => {
+    F.guionClaude.push(
+      leidaComoPropia,
+      emitida({ numero: "00341", cliente_nombre: "Volta Cultural SL", cliente_nif: "B23853039", concepto: "Disseny web", base: 500, iva_pct: 21, iva: 105, total: 605 }),
+    );
+    await mensaje("", pdfSelfconta("sc341"));
+    const m = ultimoConBotones();
+    assert.match(String(m.params.text), /esperaba IVA 21 % y retención 15 %/);
+    const b = (await db().from("facturas").select("id").eq("numero_externo", "00341").single()).data!;
+    await pulsar(`x:ok:${b.id}`, await idMensajeFactura(b.id));
+    assert.equal((await ajustes()).ultimo_numero, 341);
+  });
+
+  await caso("Cliente desconocido: pide darlo de alta", async () => {
+    F.guionClaude.push(leidaComoPropia, emitida({ numero: "00342", cliente_nombre: "Nuevo Cliente GmbH", cliente_nif: "DE123456789" }));
+    await mensaje("", pdfSelfconta("sc342b"));
+    assert.match(ultimoTexto(), /No tengo a Nuevo Cliente GmbH \(DE123456789\)\. Añádelo con \/cliente_nuevo/);
+  });
+
+  await caso("Las facturas registradas cuentan en el trimestre", async () => {
+    let r: any;
+    F.guionClaude.push(agente(usar("listar", { que: "facturas", anio: 2026, trimestre: 4 })), (p) => {
+      r = JSON.parse(p.messages.at(-1).content[0].content);
+      return [texto("ok")];
+    });
+    await mensaje("facturas del 4T");
+    const numeros = r.facturas.map((f: any) => f.numero);
+    assert.ok(numeros.includes("00340") && numeros.includes("00341"), JSON.stringify(numeros));
+  });
+
+  await caso("Aviso de fin de mes en modo paralelo: hacerla en Selfconta", async () => {
+    const { ejecutarRecordatorios } = await import("@/lib/cron");
+    const textos: string[] = [];
+    await ejecutarRecordatorios(async (t) => void textos.push(t), "2026-12-28");
+    assert.match(textos.join("\n"), /Hazla en Selfconta y mándame el PDF/);
+  });
+
+  // ===== Fase 2: copia de seguridad =====
+
+  let copiaJson: any;
+  await caso("Copia semanal: la primera sale, y no se repite hasta 7 días después", async () => {
+    const { copiaSiToca } = await import("@/lib/copia");
+    const enviadas: { nombre: string; bytes: Uint8Array; texto: string }[] = [];
+    const enviar = async (bytes: Uint8Array, nombre: string, texto: string) => void enviadas.push({ bytes, nombre, texto });
+    assert.ok(await copiaSiToca(enviar, "2026-11-23"));
+    assert.equal(await copiaSiToca(enviar, "2026-11-23"), null);
+    assert.equal(await copiaSiToca(enviar, "2026-11-29"), null);
+    assert.ok(await copiaSiToca(enviar, "2026-11-30"));
+    assert.equal(enviadas.length, 2);
+    assert.equal(enviadas[0].nombre.slice(0, 12), "IVAn-copia-2");
+    copiaJson = JSON.parse(gunzipSync(enviadas[1].bytes).toString());
+    assert.equal(copiaJson.tablas.facturas.filter((f: any) => f.estado === "emitida").length, 16);
+    assert.match(enviadas[1].texto, /16 facturas/);
+  });
+
+  await caso("/copia la manda al momento por Telegram", async () => {
+    await mensaje("/copia");
+    const d = enviados("sendDocument").at(-1);
+    assert.match(String(d?.archivo?.nombre), /^IVAn-copia-\d{4}-\d{2}-\d{2}\.json\.gz$/);
+    assert.match(String(d?.params.caption), /Copia de seguridad/);
+  });
+
+  await caso("La copia se restaura en una base vacía y queda igual", async () => {
+    const { crearCopia, restaurarCopia, TABLAS } = await import("@/lib/copia");
+    const { copia } = await crearCopia();
+    execSync(`${import.meta.dirname}/reset-db.sh --vacia`, { stdio: "ignore" });
+    await new Promise((r) => setTimeout(r, 1500)); // PostgREST recarga el esquema
+    await restaurarCopia(copia);
+    for (const t of TABLAS) {
+      const { data } = await db().from(t).select("*");
+      assert.equal(data!.length, copia.tablas[t].length, `filas de ${t}`);
+    }
+    assert.equal((await ajustes()).ultimo_numero, 341);
+    const sum = (xs: any[]) => xs.reduce((s, x) => s + Number(x.base ?? 0), 0).toFixed(2);
+    assert.equal(sum((await db().from("gastos").select("base")).data!), sum(copia.tablas.gastos));
+    const del = await db().from("facturas").delete().eq("numero", "00340");
+    assert.ok(del.error, "las emitidas siguen protegidas tras restaurar");
+  });
+
+  await caso("Al quitar el modo paralelo IVAn sigue la numeración (00342)", async () => {
+    await mensaje("/ajustes emitir_desde: ninguno");
+    assert.match(ultimoTexto(), /las emite IVAn/);
+    F.guionClaude.push(forzada("preparar_factura", { ...peticionNoviembre, base: 3060 }));
+    await mensaje("/factura Zapflow 3060");
+    const b = (await db().from("facturas").select("*").eq("estado", "borrador").eq("origen", "ivan")).data!.at(-1)!;
+    await pulsar(`f:ok:${b.id}`, await idMensajeFactura(b.id));
+    assert.equal((await db().from("facturas").select("numero").eq("id", b.id).single()).data!.numero, "00342");
   });
 
   srv.close();

@@ -26,6 +26,8 @@ export interface Ajustes {
   digitos_numero: number;
   cuota_autonomo_mensual: number;
   iva_compensar_inicial: number;
+  /** Modo paralelo: hasta esta fecha (YYYY-MM-DD) se emite en otro programa y aquí solo se registra. */
+  emitir_desde: string | null;
 }
 
 export interface Cliente {
@@ -57,6 +59,8 @@ export interface Factura {
   tipo: TipoCliente;
   mencion: string | null;
   estado: "borrador" | "emitida" | "anulada";
+  origen: "ivan" | "externa";
+  numero_externo: string | null;
   pdf_path: string | null;
   telegram_message_id: number | null;
 }

@@ -18,6 +18,7 @@ await bot.api.setMyCommands([
   { command: "pdf", description: "PDF de una factura: /pdf 00337" },
   { command: "panel", description: "Enlace al panel (15 minutos)" },
   { command: "exportar", description: "Excel del año" },
+  { command: "copia", description: "Copia de seguridad ahora" },
   { command: "clientes", description: "Lista de clientes" },
   { command: "ajustes", description: "Tus datos (IBAN, email…)" },
   { command: "ayuda", description: "Qué puedo hacer" },

@@ -1,5 +1,7 @@
 import { getBot } from "@/lib/bot";
 import { ejecutarRecordatorios } from "@/lib/cron";
+import { copiaSiToca } from "@/lib/copia";
+import { InputFile } from "grammy";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -12,5 +14,16 @@ export async function GET(req: Request) {
   }
   const bot = await getBot();
   const avisos = await ejecutarRecordatorios((texto) => bot.api.sendMessage(env.allowedUserId, texto));
-  return Response.json({ enviados: avisos.map((a) => a.clave) });
+  // La copia va aparte: si falla, los avisos ya han salido; y al revés.
+  let copia: string | null = null;
+  try {
+    const r = await copiaSiToca((bytes, nombre, caption) =>
+      bot.api.sendDocument(env.allowedUserId, new InputFile(Buffer.from(bytes), nombre), { caption }),
+    );
+    copia = r?.nombre ?? null;
+  } catch (e) {
+    console.error("copia", e);
+    await bot.api.sendMessage(env.allowedUserId, `⚠️ No he podido hacer la copia de seguridad: ${e instanceof Error ? e.message : String(e)}. Pídemela con /copia.`).catch(() => {});
+  }
+  return Response.json({ enviados: avisos.map((a) => a.clave), copia });
 }

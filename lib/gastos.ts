@@ -40,12 +40,25 @@ async function aFila(x: GastoExtraido, nifPropio: string) {
   };
 }
 
-export async function registrarDesdeArchivo(archivo: { bytes: Uint8Array; mime: string; ext: string }): Promise<Gasto> {
+export interface ArchivoLeido {
+  bytes: Uint8Array;
+  mime: string;
+  ext: string;
+  extraido: GastoExtraido;
+  nifPropio: string;
+}
+
+/** Lee el archivo con Claude sin guardar nada: así se puede decidir si es un gasto o una factura propia. */
+export async function leerArchivo(archivo: { bytes: Uint8Array; mime: string; ext: string }): Promise<ArchivoLeido> {
   const ajustes = await getAjustes();
-  const path = `gastos/${hoyMadrid().slice(0, 7)}/${randomUUID()}.${archivo.ext}`;
-  await subirArchivo(path, archivo.bytes, archivo.mime);
   const extraido = await extraerGasto(archivo, ajustes.nif);
-  const fila = await aFila(extraido, ajustes.nif);
+  return { ...archivo, extraido, nifPropio: ajustes.nif };
+}
+
+export async function registrarDesdeArchivo(leido: ArchivoLeido): Promise<Gasto> {
+  const path = `gastos/${hoyMadrid().slice(0, 7)}/${randomUUID()}.${leido.ext}`;
+  await subirArchivo(path, leido.bytes, leido.mime);
+  const fila = await aFila(leido.extraido, leido.nifPropio);
   const { data, error } = await db()
     .from("gastos")
     .insert({ ...fila, archivo_path: path, estado: "borrador" })

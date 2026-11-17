@@ -4,12 +4,14 @@ import { db, getAjustes, getClientes, type Cliente, type Factura, type Gasto } f
 import { euros, fechaES, hoyMadrid, round2, tipoClientePorPais } from "./fiscal";
 import {
   aplicarCorreccion, buscarDuplicado, gastoPorMensaje, gastosDelTrimestre, getGasto,
-  registrarDesdeArchivo, setEstado, setMensaje,
+  leerArchivo, registrarDesdeArchivo, setEstado, setMensaje,
 } from "./gastos";
 import {
   comprobarAntesDeEmitir, emitirFactura, facturaPorMensaje, getFactura, pdfPorNumero, prepararBorrador,
 } from "./facturacion";
 import { trimestreActual } from "./recordatorios";
+import { esPropia, modoParalelo, prepararExterna, registrarExterna } from "./externas";
+import { enviarCopia } from "./copia";
 import { responder, type Acciones } from "./agente";
 import { transcribir } from "./voz";
 import { enlacePanel } from "./sesion";
@@ -19,6 +21,7 @@ const AYUDA = `Soy IVAn, tu gestor. Háblame normal, por escrito o con notas de 
 
 🧾 «Factura a Zapflow 3.060 de noviembre» → te enseño el borrador y la emites con ✅. Te devuelvo el PDF.
 📸 Mándame la foto o el PDF de un gasto → lo leo, lo clasifico y lo guardas con ✅.
+📥 Si me mandas el PDF de una factura tuya hecha en Selfconta, la registro con su número.
 ✏️ Para corregir un borrador, respóndele a su mensaje («la base es 41», «es de Irlanda»).
 📊 «¿Cómo va el trimestre?», «¿cuánto llevo facturado?», «¿qué tengo pendiente?»
 ✅ «Presentado el 303 del 4T, 0 €» → lo apunto.
@@ -76,6 +79,22 @@ async function textoFactura(f: Factura, c: Cliente): Promise<string> {
 const tecladoFactura = (id: string) =>
   new InlineKeyboard().text("✅ Emitir", `f:ok:${id}`).text("❌ Cancelar", `f:no:${id}`);
 
+function textoExterna(f: Factura, c: Cliente, avisos: string[]): string {
+  const l: string[] = [`📥 Factura tuya hecha fuera de IVAn · ${f.numero_externo}`];
+  l.push(`Cliente: ${c.nombre} (${c.pais})`);
+  l.push(`Fecha: ${fechaES(f.fecha)}`);
+  l.push(`Concepto: ${f.concepto}`);
+  let imp = `Base ${euros(f.base)} · IVA ${f.iva_pct}% ${euros(f.iva)}`;
+  if (f.retencion > 0) imp += ` · Retención ${f.retencion_pct}% -${euros(f.retencion)}`;
+  l.push(imp, `TOTAL ${euros(f.total)}`);
+  for (const a of avisos) l.push(`⚠️ ${a}`);
+  l.push("", "La apunto en tu libro con su número, sin generar otra. Si algo está mal, descártala y corrígela en Selfconta.");
+  return l.join("\n");
+}
+
+const tecladoExterna = (id: string) =>
+  new InlineKeyboard().text("✅ Registrar", `x:ok:${id}`).text("🗑 Descartar", `x:no:${id}`);
+
 // ---------- Utilidades ----------
 
 async function descargar(ctx: Context, fileId: string): Promise<Uint8Array> {
@@ -119,6 +138,10 @@ async function procesarTexto(ctx: Context, texto: string, respondeA?: number) {
       return;
     }
     const f = await facturaPorMensaje(respondeA);
+    if (f?.origen === "externa") {
+      await ctx.reply("Las facturas hechas en Selfconta se registran tal cual. Si algo está mal, descártala, corrígela allí y mándame el PDF nuevo.");
+      return;
+    }
     if (f) {
       const r = await prepararBorrador(texto, f);
       if (!r.ok) {
@@ -164,7 +187,17 @@ function crearBot(): Bot {
   const procesarArchivo = async (ctx: Context, fileId: string, mime: string, ext: string) => {
     const espera = await ctx.reply("Leyendo la factura…");
     const bytes = await descargar(ctx, fileId);
-    const g = await registrarDesdeArchivo({ bytes, mime, ext });
+    const leido = await leerArchivo({ bytes, mime, ext });
+    if (esPropia(leido.extraido.nif_proveedor, leido.nifPropio)) {
+      // Factura emitida por Jose en otro programa: se registra en ventas, no es un gasto.
+      const r = await prepararExterna({ bytes, mime, ext });
+      await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
+      if (!r.ok) return ctx.reply(`🤔 ${r.duda}`);
+      const msg = await ctx.reply(textoExterna(r.factura, r.cliente, r.avisos), { reply_markup: tecladoExterna(r.factura.id) });
+      await setMensaje("facturas", r.factura.id, msg.message_id);
+      return;
+    }
+    const g = await registrarDesdeArchivo(leido);
     const dup = await buscarDuplicado(g);
     const msg = await ctx.reply(textoGasto(g, dup), { reply_markup: tecladoGasto(g.id) });
     await setMensaje("gastos", g.id, msg.message_id);
@@ -256,6 +289,30 @@ function crearBot(): Bot {
     }
   });
 
+  b.callbackQuery(/^x:(ok|no):(.+)$/, async (ctx) => {
+    const [, accion, id] = ctx.match!;
+    const f = await getFactura(id);
+    if (!f || f.estado !== "borrador" || f.origen !== "externa") return ctx.answerCallbackQuery("Ya estaba resuelta");
+    if (accion === "no") {
+      await db().from("facturas").delete().eq("id", id).eq("estado", "borrador");
+      await ctx.answerCallbackQuery("Descartada");
+      return ctx.editMessageText(`🗑 Descartada: ${f.numero_externo}`);
+    }
+    try {
+      const numero = await registrarExterna(id);
+      await ctx.answerCallbackQuery(`Registrada ${numero}`);
+      await ctx.editMessageText(`✅ ${numero} registrada en tu libro · ${euros(f.total)} (emitida en Selfconta)`);
+    } catch (e) {
+      await ctx.answerCallbackQuery({ text: "No se pudo registrar" });
+      await ctx.reply(`⛔ No la he registrado:\n${e instanceof Error ? e.message : String(e)}`);
+    }
+  });
+
+  b.command("copia", async (ctx) => {
+    await ctx.replyWithChatAction("upload_document").catch(() => {});
+    await enviarCopia((bytes, nombre, texto) => ctx.replyWithDocument(new InputFile(Buffer.from(bytes), nombre), { caption: texto }));
+  });
+
   b.command("pdf", async (ctx) => {
     const numero = ctx.match?.trim();
     if (!numero) return ctx.reply("Dime el número: /pdf 00337");
@@ -311,14 +368,25 @@ function crearBot(): Bot {
   });
 
   b.command("ajustes", async (ctx) => {
-    const m = (ctx.match ?? "").match(/^(iban|email|telefono|teléfono|direccion|dirección)\s*:\s*(.+)$/i);
+    const m = (ctx.match ?? "").match(/^(iban|email|telefono|teléfono|direccion|dirección|emitir_desde)\s*:\s*(.+)$/i);
     if (!m) {
       const a = await getAjustes();
+      const emision = modoParalelo(a)
+        ? `Modo paralelo: hasta el ${fechaES(a.emitir_desde!)} las facturas se hacen en Selfconta y aquí se registran.`
+        : "Las facturas las emite IVAn.";
       return ctx.reply(
         `${a.nombre} · ${a.nif}\n${a.direccion}\n${a.email ?? ""} ${a.telefono ?? ""}\nIBAN: ${a.iban ?? "⚠️ sin IBAN"}\n` +
-          `Última factura: ${a.serie}${String(a.ultimo_numero).padStart(a.digitos_numero, "0")}\n\n` +
-          "Para cambiar: /ajustes iban: ES00 0000 ...",
+          `Última factura: ${a.serie}${String(a.ultimo_numero).padStart(a.digitos_numero, "0")}\n${emision}\n\n` +
+          "Para cambiar: /ajustes iban: ES00 0000 ... · /ajustes emitir_desde: 2027-01-01 (o «ninguno»)",
       );
+    }
+    if (m[1].toLowerCase() === "emitir_desde") {
+      const v = m[2].trim().toLowerCase();
+      const fecha = v === "ninguno" || v === "ya" ? null : v;
+      if (fecha && !/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return ctx.reply("Formato: /ajustes emitir_desde: 2027-01-01 (o «ninguno»)");
+      const { error } = await db().from("ajustes").update({ emitir_desde: fecha }).eq("id", 1);
+      if (error) throw error;
+      return ctx.reply(fecha ? `✅ Modo paralelo hasta el ${fechaES(fecha)}.` : "✅ Desde ahora las facturas las emite IVAn.");
     }
     const campo = m[1].toLowerCase().replace("é", "e").replace("ó", "o");
     const valor = campo === "iban" ? m[2].replace(/\s+/g, " ").trim().toUpperCase() : m[2].trim();
