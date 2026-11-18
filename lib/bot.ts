@@ -1,11 +1,13 @@
 import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
 import { env } from "./env";
 import { db, descargarArchivo, getAjustes, getClientes, type Cliente, type Factura, type Gasto } from "./db";
-import { euros, fechaES, hoyMadrid, round2, tipoClientePorPais } from "./fiscal";
+import { euros, fechaES, hoyMadrid, round2, tipoClientePorPais, validarDesglose } from "./fiscal";
 import {
   aplicarCorreccion, buscarDuplicado, gastoPorMensaje, gastosDelTrimestre, getGasto,
-  leerArchivo, registrarDesdeArchivo, setEstado, setMensaje,
+  leerArchivo, registrarDesdeArchivo, setEstado, setMensaje, setUso,
 } from "./gastos";
+import { cargarLibro } from "./libro";
+import { limitesRestauracion } from "./calculo";
 import {
   comprobarAntesDeEmitir, emitirFactura, facturaPorMensaje, getFactura, pdfPorNumero, prepararBorrador,
 } from "./facturacion";
@@ -32,7 +34,12 @@ Atajos: /panel (enlace al panel) · /exportar (Excel) · /pdf 00337 · /clientes
 
 // ---------- Textos de vista previa ----------
 
-function textoGasto(g: Gasto, duplicado: Gasto | null): string {
+function esRestaurante(g: Gasto): boolean {
+  const x = g.extraccion as { categoria?: string } | null;
+  return x?.categoria === "restauracion";
+}
+
+async function textoGasto(g: Gasto, duplicado: Gasto | null): Promise<string> {
   const l: string[] = ["🧾 Gasto (borrador)"];
   l.push(`Proveedor: ${g.proveedor ?? "?"}${g.pais ? ` (${g.pais})` : ""}${g.nif ? ` · ${g.nif}` : ""}`);
   l.push(`Factura: ${g.numero_factura ?? "sin número"} · ${g.fecha ? fechaES(g.fecha) : "sin fecha"}`);
@@ -42,10 +49,32 @@ function textoGasto(g: Gasto, duplicado: Gasto | null): string {
     base += ` (${g.importe_original} ${g.moneda} a ${g.tipo_cambio} ${g.moneda}/EUR, BCE)`;
   }
   l.push(base);
-  l.push(`IVA en la factura: ${euros(g.iva)}`);
-  if (g.tipo === "IVA soportado") l.push("Tipo: IVA soportado (deducible)");
+  if (g.desglose.length) {
+    for (const d of g.desglose) l.push(`IVA ${d.pct} % sobre ${euros(d.base)} = ${euros(d.cuota)}`);
+  } else {
+    l.push(`IVA en la factura: ${euros(g.iva)}`);
+  }
+  if (g.tipo === "IVA soportado") l.push("✅ Deducible");
+  else if (g.tipo === "Sin IVA deducible") l.push("⚠️ No deducible: el IVA se suma al gasto");
   else if (g.tipo && g.base !== null) {
     l.push(`Tipo: ${g.tipo} → en el 303 te autorrepercutes y deduces ${euros(round2(g.base * 0.21))} (neto 0)`);
+  }
+  if (g.desglose.length) {
+    const sumaBase = round2(g.desglose.reduce((s, d) => s + d.base, 0));
+    const sumaCuota = round2(g.desglose.reduce((s, d) => s + d.cuota, 0));
+    for (const a of validarDesglose(g.desglose, sumaBase, sumaCuota, round2(sumaBase + sumaCuota))) l.push(`⚠️ ${a}`);
+  }
+  if (g.uso === "manutencion") {
+    l.push(`🧑‍💻 Manutención: cuenta hasta ${euros(g.manutencion_limite ?? 26.67)}/día. Tiene que estar pagado con tarjeta, Bizum o transferencia, fuera de El Masnou.`);
+  }
+  if (g.uso === "atencion_cliente") {
+    const hasta = g.fecha ?? hoyMadrid();
+    const libro = await cargarLibro(Number(hasta.slice(0, 4))).catch(() => null);
+    if (libro) {
+      const { limite1pctAtenciones, disponibleAtenciones } = limitesRestauracion(libro.datos, hasta);
+      l.push(`🤝 Atención a cliente: no se deduce el IVA. Llevas gastado del 1 % (${euros(limite1pctAtenciones)}): queda ${euros(disponibleAtenciones)}.`);
+      if (g.base !== null && g.base > disponibleAtenciones) l.push("⚠️ Este gasto se pasa del 1 % de atenciones a clientes del año: lo que sobra no cuenta en el 130.");
+    }
   }
   const x = g.extraccion as { es_factura?: boolean; notas?: string | null } | null;
   if (x && x.es_factura === false) l.push("⚠️ Parece un ticket o recibo, no una factura: pide la factura completa.");
@@ -58,6 +87,15 @@ function textoGasto(g: Gasto, duplicado: Gasto | null): string {
 
 const tecladoGasto = (id: string) =>
   new InlineKeyboard().text("✅ Guardar", `g:ok:${id}`).text("🗑 Descartar", `g:no:${id}`);
+
+const tecladoRestaurante = (id: string) =>
+  new InlineKeyboard()
+    .text("🧑‍💻 Comí trabajando fuera", `g:uso:manutencion:${id}`).row()
+    .text("🤝 Invité a un cliente", `g:uso:cliente:${id}`).row()
+    .text("🏠 Era personal", `g:uso:personal:${id}`);
+
+/** Si es un restaurante y Jose aún no ha dicho para qué fue, no hay ✅ Guardar: primero elige. */
+const teclado = (g: Gasto) => (esRestaurante(g) && !g.uso ? tecladoRestaurante(g.id) : tecladoGasto(g.id));
 
 function textoPregunta(g: Gasto, pistas: ReturnType<typeof pistasDePropia>): string {
   const l: string[] = ["🤔 ¿Esta factura es tuya o es un gasto?"];
@@ -145,7 +183,7 @@ async function procesarTexto(ctx: Context, texto: string, respondeA?: number) {
     if (g) {
       const nuevo = await aplicarCorreccion(g, texto);
       const dup = await buscarDuplicado(nuevo);
-      const msg = await ctx.reply(textoGasto(nuevo, dup), { reply_markup: tecladoGasto(nuevo.id) });
+      const msg = await ctx.reply(await textoGasto(nuevo, dup), { reply_markup: teclado(nuevo) });
       await setMensaje("gastos", nuevo.id, msg.message_id);
       await ctx.api.editMessageReplyMarkup(ctx.chat!.id, respondeA).catch(() => {});
       return;
@@ -224,7 +262,7 @@ function crearBot(): Bot {
       return;
     }
     const dup = await buscarDuplicado(g);
-    const msg = await ctx.reply(textoGasto(g, dup), { reply_markup: tecladoGasto(g.id) });
+    const msg = await ctx.reply(await textoGasto(g, dup), { reply_markup: teclado(g) });
     await setMensaje("gastos", g.id, msg.message_id);
   };
 
@@ -240,6 +278,21 @@ function crearBot(): Bot {
     if (!ok.includes(mime)) return ctx.reply("Mándame un PDF o una imagen (JPG/PNG).");
     const ext = mime === "application/pdf" ? "pdf" : mime.split("/")[1];
     await procesarArchivo(ctx, d.file_id, mime, ext);
+  });
+
+  b.callbackQuery(/^g:uso:(manutencion|cliente|personal):(.+)$/, async (ctx) => {
+    const [, boton, id] = ctx.match!;
+    const g = await getGasto(id);
+    if (!g || g.estado !== "borrador") return ctx.answerCallbackQuery("Ya estaba resuelto");
+    const uso = boton === "cliente" ? "atencion_cliente" : (boton as "manutencion" | "personal");
+    const nuevo = await setUso(id, uso);
+    await ctx.answerCallbackQuery();
+    if (!nuevo) {
+      await ctx.editMessageText(`🏠 Descartado (gasto personal): ${g.proveedor ?? "gasto"}`);
+      return;
+    }
+    const dup = await buscarDuplicado(nuevo);
+    await ctx.editMessageText(await textoGasto(nuevo, dup), { reply_markup: teclado(nuevo) });
   });
 
   b.callbackQuery(/^g:(ok|no):(.+)$/, async (ctx) => {
@@ -267,7 +320,7 @@ function crearBot(): Bot {
     if (accion === "gasto") {
       const dup = await buscarDuplicado(g);
       await ctx.answerCallbackQuery();
-      await ctx.editMessageText(textoGasto(g, dup), { reply_markup: tecladoGasto(g.id) });
+      await ctx.editMessageText(await textoGasto(g, dup), { reply_markup: teclado(g) });
       await setMensaje("gastos", g.id, ctx.callbackQuery.message!.message_id);
       return;
     }

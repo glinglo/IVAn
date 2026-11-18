@@ -152,4 +152,65 @@ Todos los casos que ya existían siguen pasando (50/50).
 
 ## Notas de ejecución
 
-(Las rellena Claude Code.)
+Ejecutado el 18/11/2026. `npm test` (57/57) y `npm run typecheck` pasan.
+
+Archivos tocados: `supabase/migrations/004_desglose_iva.sql` · `lib/fiscal.ts` (`TIPOS_IVA_ES`,
+`validarDesglose`, `clasificarGasto` con la nueva firma) · `lib/claude.ts` (esquema y prompt de
+`extraerGasto`/`corregirGasto`: `desglose_iva`, `iva_espanol`, `categoria`) · `lib/gastos.ts`
+(`construirFila`, pura y exportada, usada por `aFila`; `setUso`, `LIMITE_MANUTENCION`,
+`aplicarCorreccion` entiende «invitar a un cliente», «dormí fuera», «extranjero») · `lib/db.ts` y
+`lib/libro.ts` (`desglose`, `uso`, `manutencion_limite` en `Gasto`/`GastoLista`) · `lib/calculo.ts`
+(`GastoCalc` con `desglose`/`uso`/`manutencion_limite`; `limitesRestauracion()`; `modelo303` casilla
+28 solo con `pct > 0`; `modelo390` reparte 190/191, 603/604, 605/606 por el desglose, con
+`tipoSoportado()` solo para gastos antiguos sin desglose; `pyg` usa los gastos ya limitados) ·
+`lib/bot.ts` (`textoGasto` async con líneas por tipo y conclusión, teclado de restaurante
+`g:uso:manutencion|cliente|personal:<id>`) · `app/(panel)/gastos/page.tsx` (% al lado del IVA) ·
+`tests/iva-gastos.test.ts` (nuevo) · `tests/fiscal.test.ts` (adaptado a la nueva firma de
+`clasificarGasto`) · `scripts/integracion/conversaciones.ts` (los 4 escenarios nuevos, y los
+`guardar_gasto` existentes con los campos nuevos obligatorios del esquema).
+
+Desviaciones del plan:
+- El punto 7 decía que la corrección de «dormí fuera» / «fue en el extranjero» / «era con un
+  cliente» la entendería `lib/claude.ts` (Claude). Se implementó en cambio como detección de texto
+  en `aplicarCorreccion()` (`lib/gastos.ts`), sin llamar a Claude: son datos que la factura nunca
+  dice (dónde comió, si fue con un cliente), así que no hay nada que releer del documento, y una
+  regla de texto es más fiable que depender de que Claude lo intuya. Solo reconoce la palabra
+  "extranjero" literal, no nombres de ciudades («fue en Lisboa»): eso haría falta un NLP más fino o
+  pasarlo por Claude aparte; de momento Jose tiene que decir "extranjero" explícitamente.
+- `validarDesglose()` se invoca en dos sitios con el mismo propósito pero fuentes distintas: en
+  `construirFila()` (gastos.ts) se guarda el aviso en `extraccion.notas` (reutilizando el campo que
+  ya pintaba el bot), y en `textoGasto()` (bot.ts) se vuelve a calcular a partir del `desglose`
+  guardado, por si se corrige después. No hay una columna `avisos` nueva en la migración: no hacía
+  falta, con reutilizar `extraccion.notas` basta.
+- No se ha podido ejecutar `scripts/integracion/conversaciones.ts` contra Postgres real (fuera de
+  mi alcance en este encargo); solo se ha comprobado que compila y que la lógica de cada escenario
+  encaja con lo que hace el código. Falta esa pasada para confirmar que las 50 conversaciones
+  anteriores y las 4 nuevas pasan de verdad.
+- El "municipio distinto" y el "pagado con tarjeta" de la manutención siguen sin comprobarse por
+  código (como decía el plan): el bot solo lo recuerda en el texto.
+
+**Verificación en el BOE (antes de ejecutar, pedida en el plan):** en noviembre y diciembre de 2026
+el IVA de la luz y el gas **no** bajó al 10 %. El RDL 25/2026 condiciona la rebaja de cada mes a que
+el IPC de electricidad/gas supere en más de 15 puntos el del mismo mes de 2025 (usando el IPC de
+septiembre para noviembre y el de octubre para diciembre). El IPC de electricidad fue de ~11,4 % en
+septiembre y de ~10,6 % (estimado) en octubre: por debajo del 15 %, así que ambos meses se quedan al
+21 %. No afecta al código (el tipo siempre sale de la factura, nunca se deduce del producto ni de la
+fecha) ni al caso de test "Luz en noviembre" del plan, que sigue tal cual con un 10 % como ejemplo
+genérico de que se acepta el % impreso.
+
+**Integración con Postgres real** (`~/.ivan-pg-pruebas`, Postgres 16 + PostgREST), ejecutada el
+18/11/2026: tras aplicar la migración 004 y resetear la base, `scripts/integracion/conversaciones.ts`
+daba 11 fallos. La causa de la mayoría era un PostgREST viejo (de la sesión anterior) que seguía
+escuchando en el puerto 3001 con el esquema sin `desglose`; una vez matado y relanzado con el esquema
+al día, bajó a 3 fallos reales, los tres en el test nuevo, no en el código de producción:
+- «Pulsar 🤝 Invité a un cliente» comprobaba los botones con `ultimoConBotones()` (filtra
+  `sendMessage`), pero la respuesta a un botón es un `editMessageText`. Cambiado a filtrar
+  `editMessageText`, como hacen el resto de tests de edición del archivo.
+- El test de corrección del restaurante («la bebida también es al 10 %») y el de Paddle dejaban su
+  gasto en estado "borrador" sin confirmar ni descartar. Esos borradores sueltos rompían los tests
+  posteriores que asumen un único "borrador" en la tabla (`NIF mal leído…`, que hacía
+  `.select("*").eq("estado","borrador").single()`). Añadido `g:no` al final del test de corrección y
+  `g:ok` al final del de Paddle, para dejar la tabla limpia como hacen los demás casos.
+
+Con esos tres arreglos, las 54 conversaciones pasan (54/54: las 50 de antes + las 4 nuevas del plan).
+`npm test` sigue en 57/57 y `npm run typecheck` limpio.

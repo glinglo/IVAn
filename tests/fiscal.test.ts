@@ -6,16 +6,21 @@ import { avisosDeHoy } from "../lib/recordatorios";
 import { generarFacturaPDF, limpiar } from "../lib/pdf";
 
 describe("clasificarGasto", () => {
-  it("proveedor español o con IVA → IVA soportado", () => {
-    expect(clasificarGasto("ES", 2.42)).toBe("IVA soportado");
-    expect(clasificarGasto("GB", 0.94)).toBe("IVA soportado");
+  const ok = { ivaEspanol: true, aMiNombre: true };
+  it("proveedor español o con IVA español a mi nombre → IVA soportado", () => {
+    expect(clasificarGasto("ES", 2.42, ok)).toBe("IVA soportado");
+    expect(clasificarGasto("GB", 0.94, ok)).toBe("IVA soportado");
   });
   it("UE sin IVA → ISP UE; resto → ISP fuera UE", () => {
-    expect(clasificarGasto("IE", 0)).toBe("ISP UE");
-    expect(clasificarGasto("ee", 0)).toBe("ISP UE");
-    expect(clasificarGasto("US", 0)).toBe("ISP fuera UE");
-    expect(clasificarGasto("CH", 0)).toBe("ISP fuera UE");
-    expect(clasificarGasto(null, 0)).toBe("ISP fuera UE");
+    expect(clasificarGasto("IE", 0, ok)).toBe("ISP UE");
+    expect(clasificarGasto("ee", 0, ok)).toBe("ISP UE");
+    expect(clasificarGasto("US", 0, ok)).toBe("ISP fuera UE");
+    expect(clasificarGasto("CH", 0, ok)).toBe("ISP fuera UE");
+    expect(clasificarGasto(null, 0, ok)).toBe("ISP fuera UE");
+  });
+  it("IVA no español, o español sin mi NIF → Sin IVA deducible", () => {
+    expect(clasificarGasto("GB", 2.56, { ivaEspanol: false, aMiNombre: true })).toBe("Sin IVA deducible");
+    expect(clasificarGasto("ES", 4.2, { ivaEspanol: true, aMiNombre: false })).toBe("Sin IVA deducible");
   });
 });
 

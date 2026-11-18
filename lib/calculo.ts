@@ -1,7 +1,7 @@
 // Cálculo de los modelos 303, 130 y 349 y del P&L. Funciones puras: reciben los datos ya
 // leídos de la base de datos. Reproducen la hoja de cálculo y el P&L de la gestoría.
 
-import { rangoTrimestre, round2 } from "./fiscal";
+import { rangoTrimestre, round2, type LineaIva } from "./fiscal";
 
 export interface FacturaCalc {
   fecha: string;
@@ -22,6 +22,12 @@ export interface GastoCalc {
   proveedor?: string | null;
   nif?: string | null;
   pais?: string | null;
+  /** Una línea por tipo de IVA, tal como lo puso la factura. Vacío = gasto antiguo sin desglose. */
+  desglose?: LineaIva[];
+  /** Restaurantes y hostelería: para qué fue, si Jose lo ha dicho (botón del bot). */
+  uso?: "manutencion" | "atencion_cliente" | null;
+  /** Límite diario de manutención que aplica a este gasto (26,67 / 48,08 / 53,34 / 91,35 €). */
+  manutencion_limite?: number | null;
 }
 
 export interface BienCalc {
@@ -77,6 +83,59 @@ export function amortizacionDelAnio(bienes: BienCalc[], hasta: string): number {
   return round2(bienes.reduce((s, b) => s + amortizacionAcumulada(b, hasta) - amortizacionAcumulada(b, finAnterior), 0));
 }
 
+// ---------- Restaurantes: manutención y atenciones a clientes ----------
+
+/**
+ * Límites de deducción de los gastos de restaurante (art. 96.Uno.5º y 6º LIVA, 30.2.5ª LIRPF):
+ * - Manutención (comer trabajando fuera): el total con IVA de cada día no puede pasar del límite
+ *   diario; lo que pase del límite no cuenta ni en el IRPF ni su IVA se deduce. Se reparte en
+ *   proporción línea a línea del desglose, para que cuadre con lo que se mete en el 390.
+ * - Atenciones a clientes: nunca se deduce el IVA; el gasto cuenta en el IRPF hasta el 1 % de lo
+ *   facturado en el año hasta `hasta`, por orden de fecha.
+ * Pura: solo mira los gastos y facturas ya guardados.
+ */
+export function limitesRestauracion(
+  d: DatosCalc,
+  hasta: string,
+): { gastos: GastoCalc[]; limite1pctAtenciones: number; disponibleAtenciones: number } {
+  const desde = `${hasta.slice(0, 4)}-01-01`;
+  const facturadoAnio = suma(d.facturas.filter((f) => enRango(f.fecha, desde, hasta)), (f) => f.base);
+  const limite1pct = round2(facturadoAnio * 0.01);
+
+  const totalDia = new Map<string, number>();
+  for (const g of d.gastos) {
+    if (g.uso !== "manutencion" || g.fecha > hasta) continue;
+    totalDia.set(g.fecha, round2((totalDia.get(g.fecha) ?? 0) + g.base + g.iva));
+  }
+  const factorDia = new Map<string, number>();
+  for (const [fecha, total] of totalDia) {
+    const limite = d.gastos.find((g) => g.uso === "manutencion" && g.fecha === fecha)?.manutencion_limite ?? 26.67;
+    factorDia.set(fecha, total > 0 ? Math.min(1, limite / total) : 1);
+  }
+
+  let acumuladoAtenciones = 0;
+  const ajustados = new Map<GastoCalc, GastoCalc>();
+  const enOrden = d.gastos.filter((g) => g.fecha <= hasta).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  for (const g of enOrden) {
+    if (g.uso === "manutencion" && g.desglose?.length) {
+      const factor = factorDia.get(g.fecha) ?? 1;
+      const desglose = g.desglose.map((l) => ({ pct: l.pct, base: round2(l.base * factor), cuota: round2(l.cuota * factor) }));
+      ajustados.set(g, { ...g, base: suma(desglose, (l) => l.base), iva: suma(desglose, (l) => l.cuota), desglose });
+    } else if (g.uso === "atencion_cliente") {
+      const total = round2(g.base + g.iva);
+      const disponible = round2(Math.max(0, limite1pct - acumuladoAtenciones));
+      const contado = round2(Math.min(total, disponible));
+      acumuladoAtenciones = round2(acumuladoAtenciones + contado);
+      ajustados.set(g, { ...g, base: contado, iva: 0, desglose: [] });
+    }
+  }
+  return {
+    gastos: d.gastos.map((g) => ajustados.get(g) ?? g),
+    limite1pctAtenciones: limite1pct,
+    disponibleAtenciones: round2(Math.max(0, limite1pct - acumuladoAtenciones)),
+  };
+}
+
 // ---------- P&L (rendimiento de la actividad) ----------
 
 export interface PyG {
@@ -97,7 +156,7 @@ export interface PyG {
 export function pyg(d: DatosCalc, hasta: string): PyG {
   const desde = `${hasta.slice(0, 4)}-01-01`;
   const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
-  const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
+  const gs = limitesRestauracion(d, hasta).gastos.filter((g) => enRango(g.fecha, desde, hasta));
   const ingresos = suma(fs, (f) => f.base);
   const gastosFacturas = suma(gs, (g) => g.base);
   const seguridadSocial = round2(meses(desde, hasta).reduce((s, m) => s + d.cuotaMes(m), 0));
@@ -191,7 +250,7 @@ export interface Modelo303 {
 export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
   const { desde, hasta } = rangoTrimestre(anio, t);
   const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
-  const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
+  const gs = limitesRestauracion(d, hasta).gastos.filter((g) => enRango(g.fecha, desde, hasta));
   const isp = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
 
   const nacionales = fs.filter((f) => f.tipo === "nacional");
@@ -208,7 +267,9 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
   const c13 = suma(isp("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
   const c27 = round2(c09 + c11 + c13);
   const soportado = isp("IVA soportado");
-  const c28 = round2(suma(soportado, (g) => g.base) + c12);
+  // Las líneas al 0 % no dan derecho a deducción: no entran en la base de la casilla 28.
+  const baseDeducible = (g: GastoCalc) => (g.desglose?.length ? suma(g.desglose.filter((l) => l.pct > 0), (l) => l.base) : g.base);
+  const c28 = round2(suma(soportado, baseDeducible) + c12);
   const c29 = round2(suma(soportado, (g) => g.iva) + c13);
   const c36 = c10;
   const c37 = c11;
@@ -320,7 +381,7 @@ export function modelo390(d: DatosCalc, anio: number, ultimo: "compensar" | "dev
   const desde = `${anio}-01-01`;
   const hasta = `${anio}-12-31`;
   const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
-  const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
+  const gs = limitesRestauracion(d, hasta).gastos.filter((g) => enRango(g.fecha, desde, hasta));
   const ts = [1, 2, 3, 4].map((t) => modelo303(d, anio, t));
   const de = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
 
@@ -335,16 +396,20 @@ export function modelo390(d: DatosCalc, anio: number, ultimo: "compensar" | "dev
   const c34 = round2(c06 + c552 + c28);
   const c47 = c34;
 
-  // Deducible: el IVA español por tipos; la inversión del sujeto pasivo fuera de la UE se deduce
-  // como operación interior al 21 % (igual que en las casillas 28/29 del 303).
+  // Deducible: el IVA español por tipos (por el desglose de la factura; los gastos antiguos sin
+  // desglose usan tipoSoportado()); la inversión del sujeto pasivo fuera de la UE se deduce como
+  // operación interior al 21 % (igual que en las casillas 28/29 del 303).
   const soportado = de("IVA soportado");
-  const porTipo = (pct: 4 | 10 | 21) => soportado.filter((g) => tipoSoportado(g) === pct);
-  const c190 = suma(porTipo(4), (g) => g.base);
-  const c191 = suma(porTipo(4), (g) => g.iva);
-  const c603 = suma(porTipo(10), (g) => g.base);
-  const c604 = suma(porTipo(10), (g) => g.iva);
-  const c605 = round2(suma(porTipo(21), (g) => g.base) + c27);
-  const c606 = round2(suma(porTipo(21), (g) => g.iva) + c28);
+  const sinDesglose = soportado.filter((g) => !g.desglose?.length);
+  const conDesglose = soportado.filter((g) => g.desglose?.length);
+  const porTipoViejo = (pct: 4 | 10 | 21) => sinDesglose.filter((g) => tipoSoportado(g) === pct);
+  const lineasPct = (pct: number) => conDesglose.flatMap((g) => g.desglose!.filter((l) => l.pct === pct));
+  const c190 = round2(suma(porTipoViejo(4), (g) => g.base) + suma(lineasPct(4), (l) => l.base));
+  const c191 = round2(suma(porTipoViejo(4), (g) => g.iva) + suma(lineasPct(4), (l) => l.cuota));
+  const c603 = round2(suma(porTipoViejo(10), (g) => g.base) + suma(lineasPct(10), (l) => l.base));
+  const c604 = round2(suma(porTipoViejo(10), (g) => g.iva) + suma(lineasPct(10), (l) => l.cuota));
+  const c605 = round2(suma(porTipoViejo(21), (g) => g.base) + suma(lineasPct(21), (l) => l.base) + c27);
+  const c606 = round2(suma(porTipoViejo(21), (g) => g.iva) + suma(lineasPct(21), (l) => l.cuota) + c28);
   const c48 = round2(c190 + c603 + c605);
   const c49 = round2(c191 + c604 + c606);
   const c637 = c551;

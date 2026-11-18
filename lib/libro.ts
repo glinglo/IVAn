@@ -31,6 +31,9 @@ export interface GastoLista {
   tipo: GastoCalc["tipo"];
   base: number;
   iva: number;
+  desglose: GastoCalc["desglose"];
+  uso: GastoCalc["uso"];
+  manutencion_limite: number | null;
   archivo_path: string | null;
 }
 
@@ -67,7 +70,7 @@ export async function cargarLibro(anio: number): Promise<Libro> {
       .order("fecha", { ascending: false }),
     db()
       .from("gastos")
-      .select("id, fecha, proveedor, pais, nif, numero_factura, concepto, tipo, base, iva, archivo_path")
+      .select("id, fecha, proveedor, pais, nif, numero_factura, concepto, tipo, base, iva, desglose, uso, manutencion_limite, archivo_path")
       .eq("estado", "confirmado")
       .gte("fecha", desde)
       .lte("fecha", hasta)
@@ -84,7 +87,7 @@ export async function cargarLibro(anio: number): Promise<Libro> {
     cliente: clientes?.nombre ?? "?",
     nif_cliente: clientes?.nif ?? null,
   }));
-  const gastos = ((g.data ?? []) as GastoLista[]).map((x) => nums(x, ["base", "iva"]));
+  const gastos = ((g.data ?? []) as GastoLista[]).map((x) => nums(x, ["base", "iva", "manutencion_limite"]));
   const cuotas = new Map((c.data ?? []).map((r) => [String(r.mes).slice(0, 7), Number(r.importe)]));
   const bienes = (b.data ?? []).map((x) => ({
     fecha_compra: x.fecha_compra as string,

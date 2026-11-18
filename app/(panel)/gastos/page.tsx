@@ -45,7 +45,15 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
               <Fila
                 key={g.id}
                 tit={g.proveedor ?? "?"}
-                det={<>{fechaES(g.fecha)} · {g.concepto ?? ""} <span className="badge">{corto[g.tipo] ?? g.tipo}</span></>}
+                det={
+                  <>
+                    {fechaES(g.fecha)} · {g.concepto ?? ""}{" "}
+                    <span className="badge">
+                      {corto[g.tipo] ?? g.tipo}
+                      {(g.desglose ?? []).length > 0 && ` · ${g.desglose!.map((d) => `${d.pct} %`).join(" + ")}`}
+                    </span>
+                  </>
+                }
                 imp={g.base + g.iva}
                 href={g.archivo_path ? `/api/archivo?path=${encodeURIComponent(g.archivo_path)}` : null}
               />
