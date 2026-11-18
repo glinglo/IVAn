@@ -25,6 +25,7 @@ Reglas:
 | [Modelo 390](2026-11-17-modelo-390.md) | Hecho | 3 (antes del 4T) |
 | [Ajustes tras la revisión](2026-11-17-ajustes-revision.md) | Hecho | 1 (antes del 30/11) |
 | [IVA de los gastos: tipo por línea y si se deduce](2026-11-18-iva-de-los-gastos.md) | Hecho | 1 (antes de registrar gastos reales) |
+| [Puesta en marcha: permisos de Supabase, webhook y región](2026-11-18-puesta-en-marcha-ajustes.md) | Hecho | 1 (antes de crear las cuentas) |
 
 ## Plantilla
 
