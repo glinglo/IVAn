@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "./env";
-import type { TipoCliente, TipoGasto } from "./fiscal";
+import type { LineaIva, TipoCliente, TipoGasto } from "./fiscal";
 
 export const BUCKET = "documentos";
 
@@ -79,6 +79,9 @@ export interface Gasto {
   moneda: string;
   importe_original: number | null;
   tipo_cambio: number | null;
+  desglose: LineaIva[];
+  uso: "manutencion" | "atencion_cliente" | null;
+  manutencion_limite: number | null;
   a_mi_nombre: boolean | null;
   archivo_path: string | null;
   estado: "borrador" | "confirmado" | "descartado";

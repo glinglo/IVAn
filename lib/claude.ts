@@ -33,6 +33,13 @@ async function llamar<T>(opts: {
 
 // ---------- Gastos ----------
 
+export const LineaIvaExtraida = z.object({
+  tipo_pct: z.number(),
+  base: z.number().nullable(),
+  cuota: z.number().nullable(),
+});
+export type LineaIvaExtraida = z.infer<typeof LineaIvaExtraida>;
+
 export const GastoExtraido = z.object({
   es_factura: z.boolean(),
   proveedor: z.string().nullable(),
@@ -41,10 +48,13 @@ export const GastoExtraido = z.object({
   numero_factura: z.string().nullable(),
   fecha: z.string().nullable(),
   concepto: z.string().nullable(),
+  categoria: z.enum(["restauracion", "otro"]),
   moneda: z.string(),
   base: z.number().nullable(),
   iva: z.number(),
   total: z.number().nullable(),
+  desglose_iva: z.array(LineaIvaExtraida),
+  iva_espanol: z.boolean(),
   nif_destinatario: z.string().nullable(),
   notas: z.string().nullable(),
 });
@@ -66,10 +76,35 @@ const esquemaGasto = {
     numero_factura: { type: ["string", "null"] },
     fecha: { type: ["string", "null"], description: "Fecha de la factura, YYYY-MM-DD" },
     concepto: { type: ["string", "null"], description: "Qué se compra, en español, máximo 6 palabras" },
+    categoria: {
+      type: "string",
+      enum: ["restauracion", "otro"],
+      description: "'restauracion' si es un restaurante, bar u hostelería (un ticket de comida, cena, hotel con manutención…); 'otro' en cualquier otro caso",
+    },
     moneda: { type: "string", description: "ISO 4217 (EUR, USD…)" },
     base: { type: ["number", "null"], description: "Base imponible (sin impuestos) en la moneda de la factura" },
     iva: { type: "number", description: "Importe de IVA/VAT cobrado en la factura; 0 si no cobra" },
     total: { type: ["number", "null"] },
+    desglose_iva: {
+      type: "array",
+      description:
+        "Copia el cuadro de impuestos del documento, una línea por tipo. El % tal cual está impreso: nunca lo deduzcas " +
+        "del producto ni de la fecha (el tipo de la luz, el gas, etc. ha cambiado varias veces en 2026 y solo vale lo que " +
+        "pone la factura). Si solo aparece el total con IVA incluido y el %, deja base y cuota en null. Vacío si no hay cuadro de impuestos.",
+      items: {
+        type: "object",
+        properties: {
+          tipo_pct: { type: "number", description: "% de IVA tal cual aparece impreso" },
+          base: { type: ["number", "null"] },
+          cuota: { type: ["number", "null"] },
+        },
+        required: ["tipo_pct", "base", "cuota"],
+      },
+    },
+    iva_espanol: {
+      type: "boolean",
+      description: "true si el IVA es español (el emisor factura con NIF español o ES…); false si es VAT de otro país o un número OSS EU…",
+    },
     nif_destinatario: { type: ["string", "null"], description: "NIF/VAT del cliente que figura en la factura, si aparece" },
     notas: { type: ["string", "null"], description: "Algo raro o dudoso, en una frase. null si nada" },
   },
@@ -81,7 +116,9 @@ const sistemaGasto = (nif: string) =>
   `Extrae los datos exactamente como aparecen; no inventes. Si la factura muestra solo el total con IVA, ` +
   `calcula base = total - iva. Si cobra "VAT" de otro país o IVA español, ponlo en iva. ` +
   `Si es una suscripción en USD u otra moneda, deja los importes en esa moneda. ` +
-  `Si el EMISOR es el propio autónomo (NIF ${nif}), es una factura que ha emitido él: pon su NIF en nif_proveedor.`;
+  `Si el EMISOR es el propio autónomo (NIF ${nif}), es una factura que ha emitido él: pon su NIF en nif_proveedor. ` +
+  `Para corregir un gasto de restaurante, "dormí fuera" o "fue en Lisboa/el extranjero" cambia el límite de manutención; ` +
+  `"era con un cliente" o "invité a un cliente" es una atención a clientes, no manutención propia: dilo en notas si el usuario lo menciona al corregir.`;
 
 export async function extraerGasto(
   archivo: { bytes: Uint8Array; mime: string },

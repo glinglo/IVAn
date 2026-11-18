@@ -323,8 +323,8 @@ async function main() {
 
   const cursor = {
     es_factura: true, proveedor: "Anysphere, Inc. (Cursor)", nif_proveedor: "US123", pais: "US", numero_factura: "CUR-0042",
-    fecha: "2026-11-02", concepto: "suscripción Cursor", moneda: "USD", base: 20, iva: 0, total: 20,
-    nif_destinatario: "00000000T", notas: null,
+    fecha: "2026-11-02", concepto: "suscripción Cursor", categoria: "otro" as const, moneda: "USD", base: 20, iva: 0, total: 20,
+    desglose_iva: [], iva_espanol: false, nif_destinatario: "00000000T", notas: null,
   };
   let gastoId = "";
   await caso("Foto de un gasto en USD: lo convierte al cambio del BCE y lo clasifica ISP fuera UE", async () => {
@@ -361,7 +361,8 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Framer B.V.", nif_proveedor: "NL853695386B01", pais: "NL", numero_factura: "97A706DA-1920528",
-        fecha: "2026-01-14", concepto: "web hosting", moneda: "EUR", base: 180, iva: 0, total: 180, nif_destinatario: null, notas: null,
+        fecha: "2026-01-14", concepto: "web hosting", categoria: "otro", moneda: "EUR", base: 180, iva: 0, total: 180,
+        desglose_iva: [], iva_espanol: false, nif_destinatario: null, notas: null,
       }),
     );
     await mensaje("", { text: undefined, document: { file_id: "pdf1", file_unique_id: "u2", mime_type: "application/pdf", file_name: "framer.pdf" } });
@@ -376,6 +377,86 @@ async function main() {
   await caso("Un archivo que no es PDF ni imagen se rechaza", async () => {
     await mensaje("", { text: undefined, document: { file_id: "x", file_unique_id: "u3", mime_type: "application/zip", file_name: "a.zip" } });
     assert.match(ultimoTexto(), /PDF o una imagen/);
+  });
+
+  // ===== IVA de los gastos: restaurantes y el tipo que pone la factura =====
+
+  const restauranteMixto = {
+    es_factura: true, proveedor: "Restaurante Can Jep", nif_proveedor: "B12345678", pais: "ES", numero_factura: "R-991",
+    fecha: "2026-11-17", concepto: "comida de trabajo", categoria: "restauracion" as const, moneda: "EUR", base: 50, iva: 6.1, total: 56.1,
+    desglose_iva: [
+      { tipo_pct: 10, base: 40, cuota: 4 },
+      { tipo_pct: 21, base: 10, cuota: 2.1 },
+    ],
+    iva_espanol: true, nif_destinatario: "00000000T", notas: null,
+  };
+  let gastoRestauranteId = "";
+  await caso("Foto de un restaurante: dos líneas de IVA y los tres botones, sin ✅ Guardar", async () => {
+    F.archivosTelegram.set("foto-rest", Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    F.guionClaude.push(forzada("guardar_gasto", restauranteMixto));
+    await mensaje("", { text: undefined, photo: [{ file_id: "foto-rest", file_unique_id: "ur1", width: 800, height: 600 }] });
+    const g = (await db().from("gastos").select("*").eq("estado", "borrador").eq("numero_factura", "R-991")).data![0];
+    gastoRestauranteId = g.id;
+    const m = ultimoConBotones();
+    assert.match(String(m.params.text), /IVA 10 % sobre 40,00 € = 4,00 €/);
+    assert.match(String(m.params.text), /IVA 21 % sobre 10,00 € = 2,10 €/);
+    assert.match(JSON.stringify(m.params.reply_markup), /g:uso:manutencion/);
+    assert.match(JSON.stringify(m.params.reply_markup), /g:uso:cliente/);
+    assert.match(JSON.stringify(m.params.reply_markup), /g:uso:personal/);
+    assert.doesNotMatch(JSON.stringify(m.params.reply_markup), /g:ok:/);
+  });
+
+  await caso('Pulsar «🤝 Invité a un cliente»: aparece ✅ Guardar y dice cuánto queda del 1 %', async () => {
+    await pulsar(`g:uso:cliente:${gastoRestauranteId}`, await idMensajeGasto(gastoRestauranteId));
+    const m = F.telegram.filter((t) => t.metodo === "editMessageText").at(-1)!;
+    assert.match(JSON.stringify(m.params.reply_markup), /g:ok:/);
+    assert.match(String(m.params.text), /1 %/);
+    const g = (await db().from("gastos").select("*").eq("id", gastoRestauranteId).single()).data!;
+    assert.equal(g.uso, "atencion_cliente");
+    assert.equal(Number(g.base), 56.1);
+    assert.equal(Number(g.iva), 0);
+    await pulsar(`g:ok:${gastoRestauranteId}`, await idMensajeGasto(gastoRestauranteId));
+  });
+
+  let gastoCorreccionId = "";
+  await caso("Foto de otro restaurante, y responder «la bebida también es al 10 %» corrige el desglose", async () => {
+    F.archivosTelegram.set("foto-rest2", Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    F.guionClaude.push(forzada("guardar_gasto", { ...restauranteMixto, numero_factura: "R-992" }));
+    await mensaje("", { text: undefined, photo: [{ file_id: "foto-rest2", file_unique_id: "ur2", width: 800, height: 600 }] });
+    const g = (await db().from("gastos").select("*").eq("estado", "borrador").eq("numero_factura", "R-992")).data![0];
+    gastoCorreccionId = g.id;
+    F.guionClaude.push(
+      forzada("guardar_gasto", {
+        ...restauranteMixto, numero_factura: "R-992", base: 50, iva: 5, total: 55,
+        desglose_iva: [{ tipo_pct: 10, base: 50, cuota: 5 }],
+      }),
+    );
+    await responderA(await idMensajeGasto(gastoCorreccionId), "la bebida también es al 10 %");
+    const corregido = (await db().from("gastos").select("*").eq("id", gastoCorreccionId).single()).data!;
+    assert.equal(Number(corregido.iva), 5);
+    assert.deepEqual(corregido.desglose, [{ pct: 10, base: 50, cuota: 5 }]);
+    // Se descarta para no dejar un borrador suelto que afecte a los casos siguientes.
+    await pulsar(`g:no:${gastoCorreccionId}`, await idMensajeGasto(gastoCorreccionId));
+  });
+
+  await caso("PDF de Paddle con IVA: no deducible, IVA de otro país", async () => {
+    F.archivosTelegram.set("pdf-paddle", Buffer.from("%PDF-1.4 paddle"));
+    F.guionClaude.push(
+      forzada("guardar_gasto", {
+        es_factura: true, proveedor: "Paddle.com Market Ltd", nif_proveedor: "EU372017215", pais: "GB", numero_factura: "PD-1",
+        fecha: "2026-11-10", concepto: "suscripción SaaS", categoria: "otro", moneda: "EUR", base: 12.18, iva: 2.56, total: 14.74,
+        desglose_iva: [{ tipo_pct: 21, base: 12.18, cuota: 2.56 }], iva_espanol: false, nif_destinatario: "00000000T", notas: null,
+      }),
+    );
+    await mensaje("", { text: undefined, document: { file_id: "pdf-paddle", file_unique_id: "upd", mime_type: "application/pdf", file_name: "paddle.pdf" } });
+    const m = ultimoConBotones();
+    assert.match(String(m.params.text), /no deducible/i);
+    assert.match(String(m.params.text), /IVA de otro país/i);
+    const g = (await db().from("gastos").select("*").eq("numero_factura", "PD-1").single()).data!;
+    assert.equal(g.tipo, "Sin IVA deducible");
+    assert.equal(Number(g.base), 14.74);
+    assert.equal(Number(g.iva), 0);
+    await pulsar(`g:ok:${g.id}`, await idMensajeGasto(g.id));
   });
 
   // ===== Voz =====
@@ -500,7 +581,8 @@ async function main() {
   };
   const leidaComoPropia = forzada("guardar_gasto", {
     es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000000T", pais: "ES", numero_factura: "00340",
-    fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3060, iva: 0, total: 3060, nif_destinatario: "FI26899624", notas: null,
+    fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3060, iva: 0, total: 3060,
+    desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
   });
   const emitida = (extra: Record<string, unknown> = {}) =>
     forzada("registrar_factura_emitida", {
@@ -584,7 +666,8 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
-        fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3060, iva: 0, total: 3060, nif_destinatario: "FI26899624", notas: null,
+        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3060, iva: 0, total: 3060,
+        desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
       }),
     );
     return pdfSelfconta(fileId);
@@ -627,7 +710,8 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
-        fecha: "2026-11-16", concepto: "servicios UX", moneda: "EUR", base: 3000, iva: 0, total: 3000, nif_destinatario: "FI26899624", notas: null,
+        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3000, iva: 0, total: 3000,
+        desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
       }),
     );
     await responderA(msgId, "la base es 3000");

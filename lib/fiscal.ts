@@ -11,17 +11,70 @@ export type TipoCliente = "nacional" | "ue" | "fuera_ue";
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
+/** Tipos de IVA español vigentes en 2026 (art. 90 y 91 Ley 37/1992): general 21 %, reducidos 10 %
+ * y 4 %, y 0 % para los casos exentos o sin tipo. El tipo SIEMPRE sale del que pone la factura:
+ * IVAn no lo deduce nunca del producto ni de la fecha (los tipos reducidos temporales de la luz y
+ * el gas, por ejemplo, han ido y venido según el IPC, así que copiar la factura es lo único fiable). */
+export const TIPOS_IVA_ES = [0, 4, 10, 21] as const;
+export type TipoIvaEs = (typeof TIPOS_IVA_ES)[number];
+
+export interface LineaIva {
+  pct: number;
+  base: number;
+  cuota: number;
+}
+
+/**
+ * Comprueba el desglose de IVA de un gasto contra el cuadro de impuestos de la factura. No decide
+ * nada: solo avisa si algo no cuadra, para que lo confirme o lo corrija Jose. Margen de 2 céntimos
+ * por línea y por total, por el redondeo de los tickets con varios productos.
+ */
+export function validarDesglose(lineas: LineaIva[], base: number, iva: number, total: number | null): string[] {
+  const avisos: string[] = [];
+  for (const l of lineas) {
+    if (!(TIPOS_IVA_ES as readonly number[]).includes(l.pct)) {
+      avisos.push(`El ${l.pct} % no es un tipo de IVA español (0, 4, 10 o 21 %).`);
+      continue;
+    }
+    const esperada = round2((l.base * l.pct) / 100);
+    if (Math.abs(esperada - l.cuota) > 0.02) {
+      avisos.push(`IVA ${l.pct} % sobre ${euros(l.base)}: la factura pone ${euros(l.cuota)} y esperaba ${euros(esperada)}.`);
+    }
+  }
+  if (lineas.length) {
+    const sumaBase = round2(lineas.reduce((s, l) => s + l.base, 0));
+    const sumaCuota = round2(lineas.reduce((s, l) => s + l.cuota, 0));
+    if (Math.abs(sumaBase - base) > 0.02) avisos.push(`Las líneas de IVA suman ${euros(sumaBase)} de base y la factura pone ${euros(base)}.`);
+    if (Math.abs(sumaCuota - iva) > 0.02) avisos.push(`Las líneas de IVA suman ${euros(sumaCuota)} y la factura pone ${euros(iva)} de IVA.`);
+  }
+  if (total !== null && Math.abs(round2(base + iva) - total) > 0.02) {
+    avisos.push(`Base + IVA (${euros(round2(base + iva))}) no coincide con el total (${euros(total)}).`);
+  }
+  return avisos;
+}
+
 /**
  * Cómo entra un gasto en el 303:
- * - Proveedor español, o factura con IVA cobrado → IVA soportado deducible (casillas 28/29).
+ * - IVA cobrado pero no español (VAT de otro país, o OSS), o español sin tu NIF en la factura →
+ *   sin IVA deducible: la cuota pasa a ser más gasto (casilla 28/29 no lo ve).
+ * - Proveedor español, o factura con IVA español y tu NIF → IVA soportado deducible (28/29).
  * - Proveedor de otro país de la UE sin IVA → adquisición intracomunitaria de servicios con
  *   inversión del sujeto pasivo (10/11 devengado, 36/37 deducible, y va al 349 con clave I).
  * - Proveedor de fuera de la UE sin IVA → otras operaciones con inversión del sujeto pasivo
  *   (12/13 devengado, 28/29 deducible).
  */
-export function clasificarGasto(pais: string | null | undefined, iva: number): TipoGasto {
+export function clasificarGasto(
+  pais: string | null | undefined,
+  iva: number,
+  opts: { ivaEspanol: boolean; aMiNombre: boolean },
+): TipoGasto {
   const p = (pais ?? "").toUpperCase();
-  if (iva > 0 || p === "ES") return "IVA soportado";
+  if (iva > 0) {
+    if (!opts.ivaEspanol) return "Sin IVA deducible";
+    if (!opts.aMiNombre) return "Sin IVA deducible";
+    return "IVA soportado";
+  }
+  if (p === "ES") return "IVA soportado";
   if (PAISES_UE.has(p)) return "ISP UE";
   return "ISP fuera UE";
 }
