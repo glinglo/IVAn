@@ -14,16 +14,24 @@ Unos 45 minutos. Todo en plan gratis. Las claves se guardan en `.env.local` (tu 
 
 ## 2. Supabase (base de datos y archivos)
 
-1. supabase.com → New project. **Región: Frankfurt (eu-central-1)** o París, para que los datos se queden en la UE. Guarda la contraseña de la base de datos en tu gestor de contraseñas.
+1. supabase.com → New project. **Región: Frankfurt (eu-central-1)** o París, para que los datos se queden en la UE. Guarda la contraseña de la base de datos en tu gestor de contraseñas. Deja la **Data API activada** (esquema `public`) y la casilla de permisos automáticos para tablas nuevas **desmarcada**: los permisos los da la migración 005, y solo a `service_role` (ver más abajo por qué).
 2. **SQL Editor**, ejecuta en este orden (copiar y pegar cada archivo):
    1. `supabase/migrations/001_init.sql`
    2. `supabase/migrations/002_storage.sql`
    3. `supabase/migrations/003_paralelo.sql`
    4. `supabase/migrations/004_desglose_iva.sql`
-   5. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027. No se sube al repo.
-   6. `supabase/seed/datos_2026.sql`
+   5. `supabase/migrations/005_permisos.sql`
+   6. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027. No se sube al repo.
+   7. `supabase/seed/datos_2026.sql`
 3. Comprueba: `select count(*) from facturas;` → 11 · `select count(*), sum(base) from gastos;` → 71 · 2041.44.
-4. **Project Settings → API**: copia la URL del proyecto → `SUPABASE_URL` y la clave secreta (`service_role` o `sb_secret_…`) → `SUPABASE_SERVICE_ROLE_KEY`. Esa clave da acceso total: solo en `.env.local` y Vercel.
+4. Comprueba los permisos (los proyectos de Supabase creados desde el 30/05/2026 no dan acceso a las tablas por defecto; la 005 es la que lo arregla):
+   ```sql
+   select has_table_privilege('service_role', 'public.gastos', 'insert');      -- true
+   select has_table_privilege('anon', 'public.gastos', 'select');              -- false
+   select has_function_privilege('service_role', 'public.emitir_factura(uuid)', 'execute'); -- true
+   select has_function_privilege('anon', 'public.emitir_factura(uuid)', 'execute');         -- false
+   ```
+5. **Project Settings → API**: copia la URL del proyecto → `SUPABASE_URL` y la clave secreta (`service_role` o `sb_secret_…`) → `SUPABASE_SERVICE_ROLE_KEY`. Esa clave da acceso total: solo en `.env.local` y Vercel.
 
 Supabase pausa los proyectos gratis tras 7 días sin actividad; el aviso diario de IVAn lee la base de datos y lo mantiene despierto.
 
@@ -36,11 +44,11 @@ Supabase pausa los proyectos gratis tras 7 días sin actividad; el aviso diario 
 
 1. vercel.com → Add New → Project → importa `glinglo/IVAn`. Rama de producción: la que tenga el código (hoy `wip/v0`; cuando se fusione, `main`).
 2. **Settings → Environment Variables**: todas las de `.env.example` con sus valores. `APP_URL` = la URL que te da Vercel (`https://….vercel.app`).
-3. Despliega. El aviso diario ya va en `vercel.json` (09:00-10:00 hora de Madrid).
+3. Despliega. El aviso diario ya va en `vercel.json` (09:00-10:00 hora de Madrid). La región de las funciones es `fra1` (Frankfurt, al lado de Supabase), también en `vercel.json`; se ve en Settings → Functions.
 
 ## 5. Conectar el bot
 
-En tu ordenador, con `.env.local` relleno:
+En tu ordenador, con `.env.local` relleno (con `APP_URL` ya con la URL de Vercel, no `localhost`):
 
 ```
 npm install
@@ -55,9 +63,10 @@ Debe mostrar la URL `…/api/telegram` y `pending_update_count: 0`.
 2. «¿Cómo va el trimestre?» → 4T: IVA 0 €, IRPF 277,03 € (con los datos de 2026 cargados).
 3. `/panel` → abre el enlace en el móvil; las cifras deben ser las de la hoja.
 4. Manda la foto de un gasto real → revisa el borrador → ✅.
-5. «Factura a Zapflow 3.060 de noviembre» → mira el borrador (saldrá «⛔ Modo paralelo…») y **pulsa ❌ Cancelar**.
-6. `/ajustes` → debe decir «Modo paralelo: hasta el 01/01/2027».
-7. `/copia` → te llega `IVAn-copia-AAAA-MM-DD.json.gz`.
+5. Manda la foto de un ticket de restaurante → deben salir los tres botones (si es de prueba, pulsa 🏠 Era personal). Revisa que el borrador enseñe el IVA por tipo («IVA 21 % sobre …»).
+6. «Factura a Zapflow 3.060 de noviembre» → mira el borrador (saldrá «⛔ Modo paralelo…») y **pulsa ❌ Cancelar**.
+7. `/ajustes` → debe decir «Modo paralelo: hasta el 01/01/2027».
+8. `/copia` → te llega `IVAn-copia-AAAA-MM-DD.json.gz`.
 
 ## 7. Noviembre y diciembre: paralelo con Selfconta
 
@@ -70,7 +79,7 @@ Debe mostrar la URL `…/api/telegram` y `pending_update_count: 0`.
 
 ## Restaurar una copia
 
-Proyecto de Supabase nuevo → ejecuta solo las migraciones (001, 002, 003; sin los seeds) → pon su URL y clave en `.env.local` →
+Proyecto de Supabase nuevo → ejecuta solo las migraciones (001 a 005; sin los seeds) → pon su URL y clave en `.env.local` →
 
 ```
 npx tsx --env-file=.env.local scripts/restaurar.ts IVAn-copia-2026-11-23.json.gz
@@ -84,7 +93,7 @@ Los PDF de las facturas de IVAn se regeneran al pedirlos; los originales de gast
 npm test                                         # reglas fiscales y cálculo
 scripts/integracion/reset-db.sh                  # Postgres local en :54322
 POSTGREST_BIN=… scripts/integracion/arrancar.sh  # PostgREST en :3001
-npx tsx scripts/integracion/conversaciones.ts    # 49 conversaciones simuladas
+npx tsx scripts/integracion/conversaciones.ts    # 54 conversaciones simuladas
 ```
 
 La restauración de la copia puede tardar unos 20 s: borra la base y espera a que PostgREST se reconecte solo.

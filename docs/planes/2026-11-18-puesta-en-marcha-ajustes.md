@@ -1,6 +1,6 @@
 # Puesta en marcha: permisos de Supabase, webhook y región
 
-Estado: Aprobado (Jose, 18/11/2026)
+Estado: Hecho (Jose, 18/11/2026)
 18/11/2026 · Plan de Claude (proyecto IVAn)
 
 ## Por qué
@@ -105,4 +105,41 @@ Antes de la Fase 2 he revisado `docs/PUESTA_EN_MARCHA.md` contra el código de `
 
 ## Notas de ejecución
 
-(Las rellena Claude Code.)
+Ejecutado el 18/11/2026, sin desviaciones del plan. `npm test` (62/62) y `npm run typecheck` pasan.
+
+Archivos tocados:
+- `supabase/migrations/005_permisos.sql` (nuevo): los `grant`/`revoke` tal cual los da el plan.
+- `scripts/integracion/roles.sql`: crea también el rol `authenticated` y lo añade a los que entran
+  por `authenticator`, como pide la 005 para que el `revoke ... from anon, authenticated` no falle
+  (el rol tiene que existir).
+- `scripts/integracion/grants.sql`: reducido a `grant usage on schema public to anon, authenticated,
+  service_role;`, que es lo único que trae un proyecto nuevo de Supabase. El resto de permisos salen
+  de la 005.
+- `package.json`: `"set-webhook": "tsx --env-file=.env.local scripts/set-webhook.ts"`.
+- `vercel.json`: añadido `"regions": ["fra1"]`.
+- `docs/PUESTA_EN_MARCHA.md`: Data API activada y permisos automáticos desmarcados al crear el
+  proyecto; `005_permisos.sql` en la lista de migraciones (y en «Restaurar una copia», 001 a 005);
+  las cuatro comprobaciones de permisos como paso 2.4; la región `fra1` en el apartado de Vercel;
+  aviso de que `APP_URL` tiene que ser la URL de Vercel antes de `set-webhook`; los dos pasos nuevos
+  de la primera prueba (ticket de restaurante con los tres botones, borrador con el IVA por tipo);
+  «54 conversaciones» en vez de 49.
+
+Comprobado en Postgres 16 limpio (`~/.ivan-pg-pruebas`), con `scripts/integracion/reset-db.sh` y el
+`grants.sql` ya reducido (sin permisos a mano sobre tablas, secuencias o funciones; solo el
+`usage` sobre el esquema que trae un proyecto nuevo):
+```
+select has_table_privilege('service_role', 'public.gastos', 'insert');      -- t
+select has_table_privilege('anon', 'public.gastos', 'select');              -- f
+select has_function_privilege('service_role', 'public.emitir_factura(uuid)', 'execute'); -- t
+select has_function_privilege('anon', 'public.emitir_factura(uuid)', 'execute');         -- f
+```
+Con PostgREST (puerto 3001) arrancado desde cero (sin ningún proceso colgado de antes), las 54
+conversaciones de `scripts/integracion/conversaciones.ts` pasan: 54/54, incluidas las de facturas
+emitidas inmutables, copia y restauración. Confirma lo que ya había comprobado Claude en el plan:
+la 005 basta para un proyecto nuevo de Supabase, y el `revoke execute ... from public` no afecta a
+los triggers (`bloquear_factura_emitida`, `no_borrar_emitidas` siguen funcionando).
+
+No se ha ejecutado `npm run set-webhook`: tocaría un webhook de Telegram real y el entorno de
+ejecución lo bloqueó por tratarse de una acción con efectos fuera del repositorio. El cambio es solo
+el que pide el plan (`tsx --env-file=.env.local scripts/set-webhook.ts`, igual que ya hace
+`scripts/restaurar.ts`); falta que Jose lo pruebe con su `.env.local` real.
