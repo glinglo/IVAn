@@ -1,6 +1,6 @@
 # IVA de los gastos: el tipo que pone la factura y si se puede deducir
 
-Estado: Aprobado (Jose, 18/11/2026)
+Estado: Hecho (aprobado por Jose el 18/11/2026; PR #6, revisado por Claude)
 18/11/2026 · Plan de Claude (proyecto IVAn)
 Depende de: [Modelo 390](2026-11-17-modelo-390.md) (PR #5, fusionado). Sustituye su `tipoSoportado()`.
 
@@ -182,10 +182,6 @@ Desviaciones del plan:
   ya pintaba el bot), y en `textoGasto()` (bot.ts) se vuelve a calcular a partir del `desglose`
   guardado, por si se corrige después. No hay una columna `avisos` nueva en la migración: no hacía
   falta, con reutilizar `extraccion.notas` basta.
-- No se ha podido ejecutar `scripts/integracion/conversaciones.ts` contra Postgres real (fuera de
-  mi alcance en este encargo); solo se ha comprobado que compila y que la lógica de cada escenario
-  encaja con lo que hace el código. Falta esa pasada para confirmar que las 50 conversaciones
-  anteriores y las 4 nuevas pasan de verdad.
 - El "municipio distinto" y el "pagado con tarjeta" de la manutención siguen sin comprobarse por
   código (como decía el plan): el bot solo lo recuerda en el texto.
 

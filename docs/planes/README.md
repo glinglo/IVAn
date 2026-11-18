@@ -24,7 +24,7 @@ Reglas:
 | [303: ventas al 21 % en las casillas 07/09](2026-11-17-303-casillas-07-09.md) | Hecho | 2 (antes del 4T) |
 | [Modelo 390](2026-11-17-modelo-390.md) | Hecho | 3 (antes del 4T) |
 | [Ajustes tras la revisión](2026-11-17-ajustes-revision.md) | Hecho | 1 (antes del 30/11) |
-| [IVA de los gastos: tipo por línea y si se deduce](2026-11-18-iva-de-los-gastos.md) | Aprobado | 1 (antes de registrar gastos reales) |
+| [IVA de los gastos: tipo por línea y si se deduce](2026-11-18-iva-de-los-gastos.md) | Hecho | 1 (antes de registrar gastos reales) |
 
 ## Plantilla
 
