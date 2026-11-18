@@ -35,4 +35,8 @@ export function verificarToken(token: string | undefined | null, tipo: Tipo, aho
   }
 }
 
-export const enlacePanel = () => `${env.appUrl}/acceso?t=${crearToken("enlace")}`;
+/** Solo rutas internas del panel («/anual/2026»), nunca otra web. */
+export const rutaSegura = (ir: string | null | undefined) => (ir && /^\/(?!\/)[\w\-/]*$/.test(ir) ? ir : "/");
+
+export const enlacePanel = (ir?: string) =>
+  `${env.appUrl}/acceso?t=${crearToken("enlace")}${ir && rutaSegura(ir) !== "/" ? `&ir=${encodeURIComponent(ir)}` : ""}`;

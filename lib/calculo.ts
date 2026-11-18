@@ -267,3 +267,115 @@ export function modelo349(d: DatosCalc, anio: number, t: number): Linea349[] {
   }
   return [...lineas.values()].sort((a, b) => a.clave.localeCompare(b.clave) || b.base - a.base);
 }
+
+// ---------- Modelo 390 (resumen anual de IVA) ----------
+// Casillas del formulario del ejercicio 2026 (Orden EHA/3111/2009 con los cambios de la Orden
+// HAC/27/2026, que no afectan a estas casillas). Solo las que usa un autónomo en régimen general
+// con ventas al 21 %, servicios a clientes UE y gastos con IVA español o con inversión del sujeto pasivo.
+
+export interface Modelo390 {
+  anio: number;
+  // IVA devengado
+  c05: number; c06: number; // régimen ordinario al 21 % (01-02 es el 4 %, 03-04 el 10 %)
+  c551: number; c552: number; // adquisiciones intracomunitarias de servicios al 21 %
+  c27: number; c28: number; // IVA devengado en otros supuestos de inversión del sujeto pasivo
+  c33: number; c34: number; // total bases y cuotas IVA
+  c47: number; // total cuotas IVA y recargo de equivalencia
+  // IVA deducible
+  c190: number; c191: number; // operaciones interiores corrientes al 4 %
+  c603: number; c604: number; // … al 10 %
+  c605: number; c606: number; // … al 21 %
+  c48: number; c49: number; // total operaciones interiores corrientes
+  c637: number; c638: number; // adquisiciones intracomunitarias de servicios corrientes al 21 %
+  c597: number; c598: number; // total adquisiciones intracomunitarias de servicios
+  c64: number; // suma de deducciones
+  c65: number; // resultado régimen general (47 − 64)
+  // Resultado de la liquidación anual
+  c84: number; // suma de resultados
+  c85: number; // compensación de cuotas del ejercicio anterior
+  c86: number; // resultado de la liquidación (84 − 85)
+  // Resultado de las liquidaciones (las cuatro del 303)
+  c95: number; // total resultados a ingresar en las autoliquidaciones del ejercicio
+  c97: number; // resultado de la última autoliquidación: a compensar
+  c98: number; // resultado de la última autoliquidación: a devolver
+  c662: number; // cuotas pendientes de compensación generadas en el ejercicio (periodos distintos del último)
+  // Volumen de operaciones
+  c99: number; // operaciones en régimen general
+  c103: number; // entregas intracomunitarias de bienes y servicios
+  c110: number; // operaciones no sujetas por reglas de localización
+  c108: number; // total volumen de operaciones
+  trimestres: Modelo303[];
+  /** 86 = 95 − 97 − 98 − 662: si no cuadra, algo no encaja con los 303. */
+  cuadra: boolean;
+}
+
+/** Tipo de IVA de un gasto con IVA soportado (por su cuota), para repartirlo en el 390. */
+function tipoSoportado(g: GastoCalc): 4 | 10 | 21 {
+  const pct = g.base ? Math.round((g.iva / g.base) * 100) : 0;
+  if (pct === 21 || pct === 10 || pct === 4) return pct;
+  throw new Error(`Gasto de ${g.proveedor ?? "?"} del ${g.fecha} con IVA del ${pct} %: el 390 de IVAn solo contempla 4, 10 y 21 %`);
+}
+
+export function modelo390(d: DatosCalc, anio: number, ultimo: "compensar" | "devolver" = "compensar"): Modelo390 {
+  const desde = `${anio}-01-01`;
+  const hasta = `${anio}-12-31`;
+  const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
+  const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
+  const ts = [1, 2, 3, 4].map((t) => modelo303(d, anio, t));
+  const de = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
+
+  // Devengado: lo mismo que los cuatro 303, por casillas del 390.
+  const c05 = suma(ts, (t) => t.c07);
+  const c06 = suma(ts, (t) => t.c09);
+  const c551 = suma(de("ISP UE"), (g) => g.base);
+  const c552 = suma(de("ISP UE"), (g) => round2(g.base * IVA_ISP));
+  const c27 = suma(de("ISP fuera UE"), (g) => g.base);
+  const c28 = suma(de("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
+  const c33 = round2(c05 + c551 + c27);
+  const c34 = round2(c06 + c552 + c28);
+  const c47 = c34;
+
+  // Deducible: el IVA español por tipos; la inversión del sujeto pasivo fuera de la UE se deduce
+  // como operación interior al 21 % (igual que en las casillas 28/29 del 303).
+  const soportado = de("IVA soportado");
+  const porTipo = (pct: 4 | 10 | 21) => soportado.filter((g) => tipoSoportado(g) === pct);
+  const c190 = suma(porTipo(4), (g) => g.base);
+  const c191 = suma(porTipo(4), (g) => g.iva);
+  const c603 = suma(porTipo(10), (g) => g.base);
+  const c604 = suma(porTipo(10), (g) => g.iva);
+  const c605 = round2(suma(porTipo(21), (g) => g.base) + c27);
+  const c606 = round2(suma(porTipo(21), (g) => g.iva) + c28);
+  const c48 = round2(c190 + c603 + c605);
+  const c49 = round2(c191 + c604 + c606);
+  const c637 = c551;
+  const c638 = c552;
+  const c597 = c637;
+  const c598 = c638;
+  const c64 = round2(c49 + c598);
+  const c65 = round2(c47 - c64);
+
+  // Resultado: las cuotas del año anterior que se aplican primero (85) y lo que dejaron los 303.
+  const inicial = d.ivaCompensarInicial;
+  const c85 = round2(Math.min(inicial, suma(ts, (t) => t.c78)));
+  const c84 = c65;
+  const c86 = round2(c84 - c85);
+  const t4 = ts[3];
+  const c95 = suma(ts, (t) => Math.max(t.c71, 0));
+  const negativoUltimo = round2(Math.max(-t4.c71, 0));
+  const c97 = ultimo === "compensar" ? negativoUltimo : 0;
+  const c98 = ultimo === "devolver" ? negativoUltimo : 0;
+  const c662 = round2(Math.max(0, t4.c87 - (inicial - c85)));
+
+  const c99 = c05;
+  const c103 = suma(fs.filter((f) => f.tipo === "ue"), (f) => f.base);
+  const c110 = suma(fs.filter((f) => f.tipo === "fuera_ue"), (f) => f.base);
+  const c108 = round2(c99 + c103 + c110);
+
+  return {
+    anio, c05, c06, c551, c552, c27, c28, c33, c34, c47,
+    c190, c191, c603, c604, c605, c606, c48, c49, c637, c638, c597, c598, c64, c65,
+    c84, c85, c86, c95, c97, c98, c662, c99, c103, c110, c108,
+    trimestres: ts,
+    cuadra: Math.abs(c86 - (c95 - c97 - c98 - c662)) < 0.005,
+  };
+}
