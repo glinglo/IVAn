@@ -121,12 +121,15 @@ export function limitesRestauracion(
       const factor = factorDia.get(g.fecha) ?? 1;
       const desglose = g.desglose.map((l) => ({ pct: l.pct, base: round2(l.base * factor), cuota: round2(l.cuota * factor) }));
       ajustados.set(g, { ...g, base: suma(desglose, (l) => l.base), iva: suma(desglose, (l) => l.cuota), desglose });
+    } else if (g.uso === "manutencion") {
+      const factor = factorDia.get(g.fecha) ?? 1;
+      ajustados.set(g, { ...g, base: round2(g.base * factor), iva: round2(g.iva * factor) });
     } else if (g.uso === "atencion_cliente") {
       const total = round2(g.base + g.iva);
       const disponible = round2(Math.max(0, limite1pct - acumuladoAtenciones));
       const contado = round2(Math.min(total, disponible));
       acumuladoAtenciones = round2(acumuladoAtenciones + contado);
-      ajustados.set(g, { ...g, base: contado, iva: 0, desglose: [] });
+      ajustados.set(g, { ...g, base: contado, iva: 0, desglose: [], tipo: "Sin IVA deducible" });
     }
   }
   return {
@@ -267,8 +270,12 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
   const c13 = suma(isp("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
   const c27 = round2(c09 + c11 + c13);
   const soportado = isp("IVA soportado");
-  // Las líneas al 0 % no dan derecho a deducción: no entran en la base de la casilla 28.
-  const baseDeducible = (g: GastoCalc) => (g.desglose?.length ? suma(g.desglose.filter((l) => l.pct > 0), (l) => l.base) : g.base);
+  // Las líneas al 0 % no dan derecho a deducción: no entran en la base de la casilla 28. Un gasto sin
+  // desglose y sin IVA (por ejemplo, español pero con IVA 0 €) tampoco: no hay cuota que deducir.
+  const baseDeducible = (g: GastoCalc) => {
+    if (g.desglose?.length) return suma(g.desglose.filter((l) => l.pct > 0), (l) => l.base);
+    return g.iva > 0 ? g.base : 0;
+  };
   const c28 = round2(suma(soportado, baseDeducible) + c12);
   const c29 = round2(suma(soportado, (g) => g.iva) + c13);
   const c36 = c10;
@@ -400,7 +407,9 @@ export function modelo390(d: DatosCalc, anio: number, ultimo: "compensar" | "dev
   // desglose usan tipoSoportado()); la inversión del sujeto pasivo fuera de la UE se deduce como
   // operación interior al 21 % (igual que en las casillas 28/29 del 303).
   const soportado = de("IVA soportado");
-  const sinDesglose = soportado.filter((g) => !g.desglose?.length);
+  // Un gasto sin desglose y sin IVA (español pero con cuota 0 €) no tiene tipo que adivinar: no entra
+  // en ninguna de las casillas 190-606, igual que en la casilla 28 del 303.
+  const sinDesglose = soportado.filter((g) => !g.desglose?.length && g.iva > 0);
   const conDesglose = soportado.filter((g) => g.desglose?.length);
   const porTipoViejo = (pct: 4 | 10 | 21) => sinDesglose.filter((g) => tipoSoportado(g) === pct);
   const lineasPct = (pct: number) => conDesglose.flatMap((g) => g.desglose!.filter((l) => l.pct === pct));

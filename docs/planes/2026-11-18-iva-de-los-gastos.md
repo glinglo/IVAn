@@ -214,3 +214,28 @@ al día, bajó a 3 fallos reales, los tres en el test nuevo, no en el código de
 
 Con esos tres arreglos, las 54 conversaciones pasan (54/54: las 50 de antes + las 4 nuevas del plan).
 `npm test` sigue en 57/57 y `npm run typecheck` limpio.
+
+**Revisión del PR #6, corregida el 18/11/2026:**
+- `aplicarCorreccion()` (`lib/gastos.ts`) no volvía a aplicar «Sin IVA deducible» cuando el gasto ya
+  tenía `uso = 'atencion_cliente'` y la corrección venía de releer con Claude: nueva función
+  `sinIvaPorAtencionCliente()`, usada tanto por `marcarAtencionCliente()` (al pulsar el botón) como
+  por la rama de corrección por Claude.
+- `limitesRestauracion()` (`lib/calculo.ts`) ahora pone siempre `tipo: 'Sin IVA deducible'` en los
+  gastos de atención a cliente que devuelve, aunque el de la base de datos siguiera como «IVA
+  soportado» (por ejemplo, si se corrigió sin pasar por `aplicarCorreccion`). También aplica el
+  factor del día a la manutención sin desglose (antes solo lo aplicaba si había desglose; un ticket
+  de manutención sin desglose no se recortaba nunca).
+- `modelo390()` lanzaba `tipoSoportado()` sobre gastos «IVA soportado» sin desglose y con `iva = 0`
+  (división por cero → 0 %, ni es 4/10/21 → excepción). Ahora esos gastos se excluyen de 190-606 (no
+  hay cuota que repartir) y la casilla 28 del 303 tampoco suma su base (antes sí, por error).
+- `construirFila()` validaba `base + iva` contra sí mismo (`total = base + iva`), así que el aviso
+  de «no coincide con el total» nunca podía saltar. Ahora compara contra `x.total` (el total impreso
+  en la factura, convertido a euros si hace falta); si Claude no lo extrajo, ese punto en concreto no
+  se comprueba (el resto de avisos de `validarDesglose` sigue en pie). `validarDesglose()` acepta
+  `total: number | null`.
+- Nuevos tests en `tests/iva-gastos.test.ts` para los cuatro puntos; cada uno pasa sin tocar las
+  cifras de 2026: 303 [71] −2,42 / −0,42 / 207,46 / 0 €, 130 1.216,02 / 1.272,90 / 1.141,50 / 277,03 €,
+  390 86 = 207,46 € y 108 = 29.460 € (comprobado con `tests/calculo.test.ts`, que no cambia).
+- `docs/PUESTA_EN_MARCHA.md`: añadida la migración 004 a la lista, después de la 003.
+- Integración repetida con Postgres 16 real (`~/.ivan-pg-pruebas`) y PostgREST: 54/54. `npm test`
+  62/62 y `npm run typecheck` limpio.

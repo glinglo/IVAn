@@ -19,8 +19,9 @@ Unos 45 minutos. Todo en plan gratis. Las claves se guardan en `.env.local` (tu 
    1. `supabase/migrations/001_init.sql`
    2. `supabase/migrations/002_storage.sql`
    3. `supabase/migrations/003_paralelo.sql`
-   4. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027. No se sube al repo.
-   5. `supabase/seed/datos_2026.sql`
+   4. `supabase/migrations/004_desglose_iva.sql`
+   5. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027. No se sube al repo.
+   6. `supabase/seed/datos_2026.sql`
 3. Comprueba: `select count(*) from facturas;` → 11 · `select count(*), sum(base) from gastos;` → 71 · 2041.44.
 4. **Project Settings → API**: copia la URL del proyecto → `SUPABASE_URL` y la clave secreta (`service_role` o `sb_secret_…`) → `SUPABASE_SERVICE_ROLE_KEY`. Esa clave da acceso total: solo en `.env.local` y Vercel.
 

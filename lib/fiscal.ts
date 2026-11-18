@@ -29,7 +29,7 @@ export interface LineaIva {
  * nada: solo avisa si algo no cuadra, para que lo confirme o lo corrija Jose. Margen de 2 céntimos
  * por línea y por total, por el redondeo de los tickets con varios productos.
  */
-export function validarDesglose(lineas: LineaIva[], base: number, iva: number, total: number): string[] {
+export function validarDesglose(lineas: LineaIva[], base: number, iva: number, total: number | null): string[] {
   const avisos: string[] = [];
   for (const l of lineas) {
     if (!(TIPOS_IVA_ES as readonly number[]).includes(l.pct)) {
@@ -47,7 +47,7 @@ export function validarDesglose(lineas: LineaIva[], base: number, iva: number, t
     if (Math.abs(sumaBase - base) > 0.02) avisos.push(`Las líneas de IVA suman ${euros(sumaBase)} de base y la factura pone ${euros(base)}.`);
     if (Math.abs(sumaCuota - iva) > 0.02) avisos.push(`Las líneas de IVA suman ${euros(sumaCuota)} y la factura pone ${euros(iva)} de IVA.`);
   }
-  if (Math.abs(round2(base + iva) - total) > 0.02) {
+  if (total !== null && Math.abs(round2(base + iva) - total) > 0.02) {
     avisos.push(`Base + IVA (${euros(round2(base + iva))}) no coincide con el total (${euros(total)}).`);
   }
   return avisos;

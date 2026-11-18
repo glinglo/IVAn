@@ -42,8 +42,10 @@ export function construirFila(x: GastoExtraido, nifPropio: string, cambio: numbe
     iva = round2(iva / cambio);
   }
   let desglose = ajustarRedondeo(convertirDesglose(x.desglose_iva, moneda === "EUR" ? null : cambio), base ?? 0, iva);
-  const total = round2((base ?? 0) + iva);
-  const avisos = base !== null ? validarDesglose(desglose, base, iva, total) : [];
+  // El total impreso es el que de verdad valida que no falte ninguna línea; si no viene, no se
+  // comprueba ese punto (no hay con qué comparar).
+  const totalFactura = x.total !== null ? (cambio ? round2(x.total / cambio) : round2(x.total)) : null;
+  const avisos = base !== null ? validarDesglose(desglose, base, iva, totalFactura) : [];
 
   const aMiNombre = x.nif_destinatario ? normalizaNif(x.nif_destinatario) === normalizaNif(nifPropio) : false;
   let tipo = clasificarGasto(x.pais, iva, { ivaEspanol: x.iva_espanol, aMiNombre });
@@ -132,15 +134,15 @@ function ajustarLimiteManutencion(actual: number, texto: string): number {
   return LIMITE_MANUTENCION.base;
 }
 
+/** Si el gasto es (o pasa a ser) una atención a un cliente, el IVA no se deduce: se suma a la base. */
+function sinIvaPorAtencionCliente(fila: { tipo: Gasto["tipo"]; base: number | null; iva: number }): Partial<Gasto> {
+  if (fila.tipo !== "IVA soportado" || fila.base === null) return {};
+  return { base: round2(fila.base + fila.iva), iva: 0, tipo: "Sin IVA deducible", desglose: [] };
+}
+
 /** El gasto es una atención a un cliente: el IVA no se deduce (pasa a ser más gasto), como «Sin IVA deducible». */
 async function marcarAtencionCliente(g: Gasto): Promise<Gasto> {
-  const cambios: Partial<Gasto> = { uso: "atencion_cliente" };
-  if (g.tipo === "IVA soportado" && g.base !== null) {
-    cambios.base = round2(g.base + g.iva);
-    cambios.iva = 0;
-    cambios.tipo = "Sin IVA deducible";
-    cambios.desglose = [];
-  }
+  const cambios: Partial<Gasto> = { uso: "atencion_cliente", ...sinIvaPorAtencionCliente(g) };
   const { data, error } = await db().from("gastos").update(cambios).eq("id", g.id).select("*").single();
   if (error) throw error;
   return nums(data as Gasto, NUMERICOS);
@@ -179,7 +181,8 @@ export async function aplicarCorreccion(g: Gasto, texto: string): Promise<Gasto>
   const ajustes = await getAjustes();
   const nuevo = await corregirGasto(g.extraccion as GastoExtraido, texto, ajustes.nif);
   const fila = await aFila(nuevo, ajustes.nif);
-  const { data, error } = await db().from("gastos").update(fila).eq("id", g.id).select("*").single();
+  const filaFinal = g.uso === "atencion_cliente" ? { ...fila, ...sinIvaPorAtencionCliente(fila) } : fila;
+  const { data, error } = await db().from("gastos").update(filaFinal).eq("id", g.id).select("*").single();
   if (error) throw error;
   return nums(data as Gasto, NUMERICOS);
 }

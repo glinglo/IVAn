@@ -145,6 +145,27 @@ describe("construirFila", () => {
   });
 });
 
+describe("construirFila: validarDesglose contra el total impreso", () => {
+  it("avisa si el total impreso no coincide, aunque base + iva de la extracción sí cuadren", () => {
+    const x = extraido({
+      base: 100, iva: 21, total: 123, // la factura trae una propina de 2 € que no está en el desglose
+      desglose_iva: [{ tipo_pct: 21, base: 100, cuota: 21 }], nif_destinatario: NIF,
+    });
+    const fila = construirFila(x, NIF, null);
+    expect(fila.extraccion.notas).toMatch(/no coincide con el total/);
+  });
+
+  it("sin total impreso, no se comprueba ese punto (pero el resto de avisos siguen)", () => {
+    const x = extraido({
+      base: 100, iva: 21, total: null,
+      desglose_iva: [{ tipo_pct: 5, base: 100, cuota: 5 }], nif_destinatario: NIF,
+    });
+    const fila = construirFila(x, NIF, null);
+    expect(fila.extraccion.notas).not.toMatch(/no coincide con el total/);
+    expect(fila.extraccion.notas).toMatch(/5 % no es un tipo de IVA español/);
+  });
+});
+
 describe("limitesRestauracion", () => {
   const restauranteMixto: GastoCalc = {
     fecha: "2026-11-10",
@@ -249,5 +270,45 @@ describe("303, casilla 28", () => {
     const m = modelo303(datos([g]), 2026, 4);
     expect(m.c28).toBe(50);
     expect(m.c29).toBe(4);
+  });
+
+  it("gasto español sin IVA y sin desglose: no suma base ni da error en el 390", () => {
+    const g: GastoCalc = { fecha: "2026-11-05", base: 30, iva: 0, tipo: "IVA soportado" };
+    const m303 = modelo303(datos([g]), 2026, 4);
+    expect(m303.c28).toBe(0);
+    expect(m303.c29).toBe(0);
+    expect(() => modelo390(datos([g]), 2026)).not.toThrow();
+    const m390 = modelo390(datos([g]), 2026);
+    expect(m390.c48).toBe(0);
+    expect(m390.c49).toBe(0);
+  });
+});
+
+describe("atención a cliente tras una corrección", () => {
+  it("un gasto ya marcado como atención a cliente no entra en las casillas 28/29 ni rompe el 390", () => {
+    // Simula un gasto que sigue con tipo «IVA soportado» en la base de datos (por ejemplo, tras
+    // corregirlo con Claude sin pasar por aplicarCorreccion) pero con uso = atencion_cliente.
+    const g: GastoCalc = {
+      fecha: "2026-11-10", base: 50, iva: 6.1, tipo: "IVA soportado", uso: "atencion_cliente",
+      desglose: [
+        { pct: 10, base: 40, cuota: 4 },
+        { pct: 21, base: 10, cuota: 2.1 },
+      ],
+    };
+    const d = datos([g], 29460);
+    const m303 = modelo303(d, 2026, 4);
+    expect(m303.c28).toBe(0);
+    expect(m303.c29).toBe(0);
+    expect(() => modelo390(d, 2026)).not.toThrow();
+  });
+});
+
+describe("manutención sin desglose", () => {
+  it("un ticket sin NIF de 60 € marcado como manutención cuenta hasta el límite diario", () => {
+    const g: GastoCalc = {
+      fecha: "2026-11-10", base: 60, iva: 0, tipo: "Sin IVA deducible", uso: "manutencion", manutencion_limite: 26.67,
+    };
+    const p = pyg(datos([g]), "2026-12-31");
+    expect(p.gastosFacturas).toBe(26.67);
   });
 });
