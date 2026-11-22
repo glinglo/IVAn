@@ -43,10 +43,13 @@ const ahora = () => Math.floor(Date.now() / 1000);
 const usar = (name: string, input: unknown) => ({ type: "tool_use", id: `tu_${Math.random().toString(36).slice(2)}`, name, input });
 const texto = (t: string) => ({ type: "text", text: t });
 
+/** Claude Sonnet 5.5 no admite tool_choice: las respuestas "forzadas" llegan por structured
+ * outputs (output_config.format, json_schema), como JSON en un bloque de texto. */
 function forzada(nombre: string, input: unknown): F.Guion {
   return (p) => {
-    assert.equal(p.tool_choice?.name, nombre, `Claude debía llamarse con ${nombre}`);
-    return [usar(nombre, input)];
+    assert.equal(p.output_config?.format?.type, "json_schema", `${nombre} debía pedirse con structured outputs`);
+    assert.ok(!p.tool_choice, `${nombre} no debe forzar una herramienta`);
+    return [texto(JSON.stringify(input))];
   };
 }
 function agente(...bloques: any[]): F.Guion {
@@ -92,18 +95,18 @@ async function esperarPostgrest(db: () => { from: Function }, maxMs = 60_000) {
 
 async function main() {
   const srv = await F.arrancar();
-  const { getBot } = await import("@/lib/bot");
+  const { getBot, manejarActualizacion } = await import("@/lib/bot");
   const { db } = await import("@/lib/db");
   const bot = await getBot();
 
   const mensaje = async (text: string, extra: Record<string, unknown> = {}) => {
     const message_id = F.nuevoIdMensaje();
     const entities = text.startsWith("/") ? [{ type: "bot_command", offset: 0, length: text.split(" ")[0].length }] : undefined;
-    await bot.handleUpdate({ update_id: updateId++, message: { message_id, date: ahora(), chat, from: yo, text, entities, ...extra } } as any);
+    await manejarActualizacion(bot, { update_id: updateId++, message: { message_id, date: ahora(), chat, from: yo, text, entities, ...extra } } as any);
     return message_id;
   };
   const pulsar = async (data: string, message_id: number) =>
-    bot.handleUpdate({
+    manejarActualizacion(bot, {
       update_id: updateId++,
       callback_query: { id: String(updateId), from: yo, chat_instance: "1", data, message: { message_id, date: ahora(), chat, text: "" } },
     } as any);
@@ -125,7 +128,7 @@ async function main() {
   // ===== Acceso =====
 
   await caso("Un desconocido no recibe respuesta", async () => {
-    await bot.handleUpdate({ update_id: updateId++, message: { message_id: 1, date: ahora(), chat, from: { ...yo, id: 999 }, text: "hola" } } as any);
+    await manejarActualizacion(bot, { update_id: updateId++, message: { message_id: 1, date: ahora(), chat, from: { ...yo, id: 999 }, text: "hola" } } as any);
     assert.equal(F.telegram.length, 0);
   });
 
@@ -242,7 +245,8 @@ async function main() {
     const antes = await idMensajeFactura(facturaId);
     F.guionClaude.push((p) => {
       assert.match(JSON.stringify(p.messages), /Borrador actual/);
-      return [usar("preparar_factura", { ...peticionNoviembre, base: 3020 })];
+      assert.equal(p.output_config?.format?.type, "json_schema");
+      return [texto(JSON.stringify({ ...peticionNoviembre, base: 3020 }))];
     });
     await responderA(antes, "la base es 3.020");
     const bs = await borradores();
@@ -319,6 +323,25 @@ async function main() {
     assert.match(ultimoTexto(), /No encuentro/);
   });
 
+  await caso("Si el agente falla sin que nadie lo capture, bot.catch avisa y el registro no lleva el token", async () => {
+    // El SDK reintenta los 500 (2 veces por defecto): un fallo en cada intento.
+    const fallo = () => {
+      throw new Error("fallo simulado del agente");
+    };
+    F.guionClaude.push(fallo, fallo, fallo);
+    const logs: unknown[][] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => logs.push(args);
+    try {
+      await mensaje("¿cómo va el trimestre?");
+    } finally {
+      console.error = original;
+    }
+    assert.match(ultimoTexto(), /⛔ Algo ha fallado/);
+    const registrado = JSON.stringify(logs);
+    assert.ok(!registrado.includes(String(process.env.TELEGRAM_BOT_TOKEN)), "el registro no debe llevar el token del bot");
+  });
+
   // ===== Gastos =====
 
   const cursor = {
@@ -372,6 +395,19 @@ async function main() {
     const g = (await db().from("gastos").select("id").eq("estado", "borrador")).data![0];
     await pulsar(`g:no:${g.id}`, await idMensajeGasto(g.id));
     assert.equal((await db().from("gastos").select("estado").eq("id", g.id).single()).data!.estado, "descartado");
+  });
+
+  await caso('Si Claude falla al leer un gasto, "Leyendo la factura…" pasa a avisar del error', async () => {
+    F.archivosTelegram.set("foto-rota", Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+    const antesGastos = (await db().from("gastos").select("id")).data!.length;
+    // Sin guion en F.guionClaude: el Claude simulado responde 500 "Guion de Claude agotado".
+    await mensaje("", { text: undefined, photo: [{ file_id: "foto-rota", file_unique_id: "ur3", width: 800, height: 600 }] });
+    assert.ok(F.telegram.some((t) => t.metodo === "sendMessage" && t.params.text === "Leyendo la factura…"));
+    const editado = F.telegram.filter((t) => t.metodo === "editMessageText").at(-1);
+    assert.ok(editado, "el mensaje de espera se edita, no se queda así para siempre");
+    assert.match(String(editado!.params.text), /⚠️ No he podido leer la factura/);
+    const despuesGastos = (await db().from("gastos").select("id")).data!.length;
+    assert.equal(despuesGastos, antesGastos, "no se guarda ningún gasto a medias");
   });
 
   await caso("Un archivo que no es PDF ni imagen se rechaza", async () => {

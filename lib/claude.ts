@@ -5,30 +5,34 @@ import { env } from "./env";
 let anthropic: Anthropic | null = null;
 export const ai = () => (anthropic ??= new Anthropic());
 
-/** Llama a Claude obligándole a responder con una herramienta y valida el resultado. */
+/**
+ * Llama a Claude pidiendo la respuesta con structured outputs (sin tool_choice: Claude Sonnet 5.5
+ * no admite forzar una herramienta, solo `auto` o `none`) y valida el JSON resultante con zod.
+ */
 async function llamar<T>(opts: {
   system: string;
   content: Anthropic.ContentBlockParam[];
-  tool: { name: string; description: string; schema: Record<string, unknown> };
+  esquema: { descripcion: string; schema: Record<string, unknown> };
   validar: z.ZodType<T>;
 }): Promise<T> {
   const res = await ai().messages.create({
     model: env.anthropicModel,
     max_tokens: 1500,
     system: opts.system,
-    tools: [
-      {
-        name: opts.tool.name,
-        description: opts.tool.description,
-        input_schema: opts.tool.schema as Anthropic.Tool.InputSchema,
-      },
-    ],
-    tool_choice: { type: "tool", name: opts.tool.name },
+    output_config: {
+      format: { type: "json_schema", schema: { ...opts.esquema.schema, description: opts.esquema.descripcion } },
+    },
     messages: [{ role: "user", content: opts.content }],
   });
-  const uso = res.content.find((b) => b.type === "tool_use");
-  if (!uso || uso.type !== "tool_use") throw new Error("Claude no devolvió datos");
-  return opts.validar.parse(uso.input);
+  const bloque = res.content.find((b) => b.type === "text");
+  if (!bloque || bloque.type !== "text") throw new Error("Claude no devolvió datos");
+  let json: unknown;
+  try {
+    json = JSON.parse(bloque.text);
+  } catch {
+    throw new Error("Claude no devolvió un JSON válido");
+  }
+  return opts.validar.parse(json);
 }
 
 // ---------- Gastos ----------
@@ -99,6 +103,7 @@ const esquemaGasto = {
           cuota: { type: ["number", "null"] },
         },
         required: ["tipo_pct", "base", "cuota"],
+        additionalProperties: false,
       },
     },
     iva_espanol: {
@@ -109,6 +114,7 @@ const esquemaGasto = {
     notas: { type: ["string", "null"], description: "Algo raro o dudoso, en una frase. null si nada" },
   },
   required: Object.keys(GastoExtraido.shape),
+  additionalProperties: false,
 };
 
 const sistemaGasto = (nif: string) =>
@@ -139,7 +145,7 @@ export async function extraerGasto(
   return llamar({
     system: sistemaGasto(nifPropio),
     content: [bloque, { type: "text", text: "Extrae los datos de esta factura." }],
-    tool: { name: "guardar_gasto", description: "Datos de la factura de gasto", schema: esquemaGasto },
+    esquema: { descripcion: "Datos de la factura de gasto", schema: esquemaGasto },
     validar: GastoExtraido,
   });
 }
@@ -155,7 +161,7 @@ export async function corregirGasto(actual: GastoExtraido, correccion: string, n
           `El usuario corrige: "${correccion}"\n\nDevuelve todos los datos con la corrección aplicada.`,
       },
     ],
-    tool: { name: "guardar_gasto", description: "Datos corregidos", schema: esquemaGasto },
+    esquema: { descripcion: "Datos corregidos", schema: esquemaGasto },
     validar: GastoExtraido,
   });
 }
@@ -189,9 +195,8 @@ export async function extraerFacturaEmitida(archivo: { bytes: Uint8Array; mime: 
       `Lees facturas EMITIDAS por un autónomo español (NIF ${nifPropio}) con otro programa, para registrarlas en su libro. ` +
       "Extrae los datos exactamente como aparecen; no inventes ni recalcules. Importes en euros.",
     content: [bloque, { type: "text", text: "Extrae los datos de esta factura emitida." }],
-    tool: {
-      name: "registrar_factura_emitida",
-      description: "Datos de la factura emitida",
+    esquema: {
+      descripcion: "Datos de la factura emitida",
       schema: {
         type: "object",
         properties: {
@@ -208,6 +213,7 @@ export async function extraerFacturaEmitida(archivo: { bytes: Uint8Array; mime: 
           total: { type: ["number", "null"], description: "Total a pagar" },
         },
         required: Object.keys(FacturaEmitidaExtraida.shape),
+        additionalProperties: false,
       },
     },
     validar: FacturaEmitidaExtraida,
@@ -248,9 +254,8 @@ export async function interpretarFactura(opts: {
             : `Petición: "${opts.texto}"`),
       },
     ],
-    tool: {
-      name: "preparar_factura",
-      description: "Datos de la factura a emitir",
+    esquema: {
+      descripcion: "Datos de la factura a emitir",
       schema: {
         type: "object",
         properties: {
@@ -261,6 +266,7 @@ export async function interpretarFactura(opts: {
           duda: { type: ["string", "null"], description: "Qué falta o no está claro; null si nada" },
         },
         required: ["cliente_id", "base", "concepto", "fecha", "duda"],
+        additionalProperties: false,
       },
     },
     validar: PeticionFactura,

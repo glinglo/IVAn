@@ -1,4 +1,4 @@
-import { getBot } from "@/lib/bot";
+import { erroSeguro, getBot } from "@/lib/bot";
 import { ejecutarRecordatorios } from "@/lib/cron";
 import { copiaSiToca } from "@/lib/copia";
 import { InputFile } from "grammy";
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     );
     copia = r?.nombre ?? null;
   } catch (e) {
-    console.error("copia", e);
+    console.error("copia", erroSeguro(e));
     await bot.api.sendMessage(env.allowedUserId, `⚠️ No he podido hacer la copia de seguridad: ${e instanceof Error ? e.message : String(e)}. Pídemela con /copia.`).catch(() => {});
   }
   return Response.json({ enviados: avisos.map((a) => a.clave), copia });

@@ -1,6 +1,6 @@
 # Lectura de facturas con Claude Sonnet 5.5 (sin tool_choice forzado) y errores visibles
 
-Estado: Aprobado (Jose, 22/11/2026)
+Estado: Hecho (Jose, 22/11/2026)
 22/11/2026 · Plan de Claude (proyecto IVAn)
 
 ## Por qué
@@ -63,4 +63,68 @@ Al revisar el registro han salido dos problemas más:
 
 ## Notas de ejecución
 
-(Las rellena Claude Code.)
+Ejecutado el 22/11/2026, sin desviaciones de alcance (una desviación de implementación respecto al
+punto 2, explicada abajo). `npm test` (68/68) y `npm run typecheck` pasan.
+
+**Comprobación previa con la API real (punto obligatorio del plan, antes de dar nada por hecho):**
+con un texto de prueba (sin datos personales) llamé a `claude-sonnet-5-5` con `output_config.format`
+de tipo `json_schema` usando el esquema real de `guardar_gasto` (enums, `type: ["string","null"]`,
+un array de objetos anidado con su propio `required`/`additionalProperties`, y `description` en la
+raíz del esquema). La API lo aceptó y devolvió el JSON esperado en un bloque de texto; en otra
+llamada, la respuesta llegó con un bloque `thinking` antes del texto (`llamar()` ya lo tenía en
+cuenta: busca el primer bloque `type: "text"`, no asume que sea el primero). Al final, ya con el
+código terminado, repetí la comprobación llamando a `extraerGasto()` de verdad (con un PNG en
+blanco, sin datos reales) para confirmar que el esquema completo, tal cual quedó en el repo
+(con `additionalProperties: false` en todos los objetos), funciona de principio a fin.
+
+Archivos tocados:
+- `lib/claude.ts`: `llamar()` ya no manda `tools`/`tool_choice`; pide `output_config.format` de tipo
+  `json_schema` con el mismo esquema de cada caso (ahora bajo `esquema: { descripcion, schema }` en
+  vez de `tool: { name, description, schema }`: el `name` no se usaba para nada sin herramienta que
+  invocar). Lee el primer bloque `text` de la respuesta, lo parsea como JSON y lo valida con el zod
+  de siempre. Los tres esquemas (`guardar_gasto`, `registrar_factura_emitida`, `preparar_factura`)
+  llevan `additionalProperties: false` en el objeto raíz y en los objetos anidados (`desglose_iva`).
+- `package.json` / `package-lock.json`: `@anthropic-ai/sdk` de 1.9.0 a 1.12.0 (la 1.9.0 no tenía
+  `output_config` en los tipos). De paso, el lockfile tenía `"name": "gestor"` suelto de un cambio de
+  nombre anterior; `npm install` lo ha dejado en `"ivan"`, como en `package.json`.
+- `lib/bot.ts`:
+  - `procesarArchivo()` (gastos y facturas de Selfconta por foto/PDF) envuelve todo en un `try`; si
+    falla, edita el mensaje «Leyendo la factura…» con «⚠️ No he podido leer la factura: `<motivo>`».
+  - `erroSeguro()` (nueva, exportada): de un error solo sacan el nombre, el mensaje y, como mucho,
+    su `.error` (el cuerpo de la API, como en `AnthropicError`/`GrammyError`), nunca el `ctx` ni el
+    objeto entero.
+  - `b.catch()` ahora registra con `erroSeguro(err.error)` en vez de pasar `err.error` entero.
+  - **Desviación respecto al plan:** al escribir el test de integración de «el registro de un error
+    no contiene el token del bot» salió un problema que el plan no había visto: `bot.handleUpdate()`
+    (lo que usa el webhook) **nunca llama a `bot.catch`** — grammY solo invoca el `errorHandler` desde
+    `bot.start()` (long polling), que IVAn no usa. Así que el `b.catch` general que pedía el punto 2
+    era, tal cual, código muerto en producción: un fallo sin capturar dentro de una herramienta del
+    agente (p. ej. `preparar_factura`, el caso real del aviso de Jose) se habría quedado sin
+    respuesta igual que antes. Añadida `manejarActualizacion(bot, update)` (nueva, exportada): llama
+    a `handleUpdate` y, si revienta con un `BotError`, invoca `bot.errorHandler` a mano. La usan
+    `app/api/telegram/route.ts` y los ayudantes `mensaje`/`pulsar` de
+    `scripts/integracion/conversaciones.ts` en vez de `bot.handleUpdate` directamente.
+- `app/api/telegram/route.ts`: usa `manejarActualizacion` y registra con `erroSeguro(e)`.
+- `app/api/cron/recordatorios/route.ts`: el `catch` de la copia de seguridad registra con
+  `erroSeguro(e)` en vez de pasar el error entero.
+- `scripts/integracion/fakes.ts`: `claudeApi` responde 400 con el mismo mensaje que la API real
+  (`tool_choice: type "tool" and "any" are not supported for this model.`) si recibe `tool_choice`
+  de tipo `tool` o `any`.
+- `scripts/integracion/conversaciones.ts`: `forzada()` ya no construye un bloque `tool_use`: ahora
+  comprueba `output_config.format.type === "json_schema"` y que no hay `tool_choice`, y devuelve el
+  JSON como texto (que es lo que hace `llamar()` de verdad). El único sitio con un guion «a mano»
+  para `preparar_factura` (la corrección de una factura por texto) se ajustó igual. Dos casos nuevos:
+  uno simula que Claude falla al leer un gasto (sin guion: el Claude simulado responde 500 «Guion de
+  Claude agotado») y comprueba que el mensaje se edita con el aviso; el otro hace que el guion del
+  agente falle en sus tres intentos (el SDK reintenta los 500 dos veces por defecto) y comprueba que
+  `manejarActualizacion` contesta «⛔ Algo ha fallado» y que nada de lo registrado por `console.error`
+  contiene el token de Telegram de las pruebas.
+- `tests/claude-sin-tool-choice.test.ts` (nuevo): el Claude simulado rechaza `tool_choice: "tool"` y
+  `"any"` con el 400 de verdad, y no rechaza una llamada sin `tool_choice`.
+- `tests/erro-seguro.test.ts` (nuevo): `erroSeguro()` nunca deja pasar el `ctx` de un `BotError` (se
+  construye uno de verdad con un token falso y se comprueba que no aparece en el resultado), conserva
+  el `.error` de un error con forma de API, y no revienta con cualquier otra cosa.
+
+**Integración con Postgres real** (`~/.ivan-pg-pruebas`, Postgres 16 + PostgREST), ejecutada en mi
+Mac: **56/56** (las 54 de antes + las 2 nuevas de este plan). `npm test` 68/68 y `npm run typecheck`
+limpio. No cambia ninguna cifra de 2026.

@@ -1,4 +1,5 @@
-import { Bot, InlineKeyboard, InputFile, type Context } from "grammy";
+import { Bot, BotError, InlineKeyboard, InputFile, type Context } from "grammy";
+import type { Update } from "grammy/types";
 import { env } from "./env";
 import { db, descargarArchivo, getAjustes, getClientes, type Cliente, type Factura, type Gasto } from "./db";
 import { euros, fechaES, hoyMadrid, round2, tipoClientePorPais, validarDesglose } from "./fiscal";
@@ -18,6 +19,16 @@ import { responder, type Acciones } from "./agente";
 import { transcribir } from "./voz";
 import { enlacePanel } from "./sesion";
 import { exportarXlsx } from "./exportar";
+
+/** Para los registros (Vercel): nunca el `ctx` ni el `BotError` entero, que llevan el token del
+ * bot dentro. Solo el nombre, el mensaje y, como mucho, el error de la API si lo lleva dentro. */
+export function erroSeguro(e: unknown): { name: string; message: string; error?: unknown } {
+  if (e instanceof Error) {
+    const api = (e as { error?: unknown }).error;
+    return api !== undefined ? { name: e.name, message: e.message, error: api } : { name: e.name, message: e.message };
+  }
+  return { name: "Error", message: String(e) };
+}
 
 const AYUDA = `Soy IVAn, tu gestor. Háblame normal, por escrito o con notas de voz:
 
@@ -223,6 +234,20 @@ export async function getBot(): Promise<Bot> {
   return bot;
 }
 
+/**
+ * `bot.handleUpdate()` (lo que usa el webhook) no pasa por `bot.catch`: eso solo lo invoca
+ * `bot.start()` (long polling), que IVAn no usa. Así que, para que el error le llegue a Jose en
+ * vez de quedarse callado, hay que llamar al `errorHandler` a mano si `handleUpdate` revienta.
+ */
+export async function manejarActualizacion(bot: Bot, update: Update): Promise<void> {
+  try {
+    await bot.handleUpdate(update);
+  } catch (err) {
+    if (!(err instanceof BotError)) throw err;
+    await bot.errorHandler(err);
+  }
+}
+
 function crearBot(): Bot {
   const b = new Bot(env.telegramToken, { client: { apiRoot: env.telegramApiRoot } });
 
@@ -237,33 +262,38 @@ function crearBot(): Bot {
   // --- Gastos ---
   const procesarArchivo = async (ctx: Context, fileId: string, mime: string, ext: string) => {
     const espera = await ctx.reply("Leyendo la factura…");
-    const bytes = await descargar(ctx, fileId);
-    const leido = await leerArchivo({ bytes, mime, ext });
-    if (esPropia(leido.extraido.nif_proveedor, leido.nifPropio)) {
-      // Factura emitida por Jose en otro programa: se registra en ventas, no es un gasto.
-      const r = await prepararExterna({ bytes, mime, ext });
+    try {
+      const bytes = await descargar(ctx, fileId);
+      const leido = await leerArchivo({ bytes, mime, ext });
+      if (esPropia(leido.extraido.nif_proveedor, leido.nifPropio)) {
+        // Factura emitida por Jose en otro programa: se registra en ventas, no es un gasto.
+        const r = await prepararExterna({ bytes, mime, ext });
+        await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
+        if (!r.ok) return ctx.reply(`🤔 ${r.duda}`);
+        const msg = await ctx.reply(textoExterna(r.factura, r.cliente, r.avisos), { reply_markup: tecladoExterna(r.factura.id) });
+        await setMensaje("facturas", r.factura.id, msg.message_id);
+        return;
+      }
+      const g = await registrarDesdeArchivo(leido);
       await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
-      if (!r.ok) return ctx.reply(`🤔 ${r.duda}`);
-      const msg = await ctx.reply(textoExterna(r.factura, r.cliente, r.avisos), { reply_markup: tecladoExterna(r.factura.id) });
-      await setMensaje("facturas", r.factura.id, msg.message_id);
-      return;
+      const [ajustes, clientes] = await Promise.all([getAjustes(), getClientes()]);
+      const pistas = pistasDePropia(
+        { proveedor: g.proveedor, numero_factura: g.numero_factura, nif_destinatario: leido.extraido.nif_destinatario },
+        ajustes,
+        clientes,
+      );
+      if (pistas.length) {
+        // No se usa setMensaje: responder a esta pregunta no debe corregir el gasto.
+        await ctx.reply(textoPregunta(g, pistas), { reply_markup: tecladoPregunta(g.id) });
+        return;
+      }
+      const dup = await buscarDuplicado(g);
+      const msg = await ctx.reply(await textoGasto(g, dup), { reply_markup: teclado(g) });
+      await setMensaje("gastos", g.id, msg.message_id);
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      await ctx.api.editMessageText(espera.chat.id, espera.message_id, `⚠️ No he podido leer la factura: ${motivo}`).catch(() => {});
     }
-    const g = await registrarDesdeArchivo(leido);
-    await ctx.api.deleteMessage(espera.chat.id, espera.message_id).catch(() => {});
-    const [ajustes, clientes] = await Promise.all([getAjustes(), getClientes()]);
-    const pistas = pistasDePropia(
-      { proveedor: g.proveedor, numero_factura: g.numero_factura, nif_destinatario: leido.extraido.nif_destinatario },
-      ajustes,
-      clientes,
-    );
-    if (pistas.length) {
-      // No se usa setMensaje: responder a esta pregunta no debe corregir el gasto.
-      await ctx.reply(textoPregunta(g, pistas), { reply_markup: tecladoPregunta(g.id) });
-      return;
-    }
-    const dup = await buscarDuplicado(g);
-    const msg = await ctx.reply(await textoGasto(g, dup), { reply_markup: teclado(g) });
-    await setMensaje("gastos", g.id, msg.message_id);
   };
 
   b.on("message:photo", async (ctx) => {
@@ -522,7 +552,8 @@ function crearBot(): Bot {
   });
 
   b.catch(async (err) => {
-    console.error(err.error);
+    // Nunca err.ctx ni err entero (BotError): llevan el token del bot dentro.
+    console.error("bot", erroSeguro(err.error));
     const msg = err.error instanceof Error ? err.error.message : String(err.error);
     await err.ctx.reply(`⛔ Algo ha fallado: ${msg}`).catch(() => {});
   });

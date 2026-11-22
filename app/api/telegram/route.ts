@@ -1,6 +1,6 @@
 import { waitUntil } from "@vercel/functions";
 import type { Update } from "grammy/types";
-import { getBot } from "@/lib/bot";
+import { erroSeguro, getBot, manejarActualizacion } from "@/lib/bot";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -14,8 +14,9 @@ export async function POST(req: Request) {
   const update = (await req.json()) as Update;
   waitUntil(
     getBot()
-      .then((bot) => bot.handleUpdate(update))
-      .catch((e) => console.error("update", update.update_id, e)),
+      .then((bot) => manejarActualizacion(bot, update))
+      // Nunca el objeto del error entero (puede llevar el ctx y, dentro, el token del bot).
+      .catch((e) => console.error("update", update.update_id, erroSeguro(e))),
   );
   return Response.json({ ok: true });
 }

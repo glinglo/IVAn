@@ -26,7 +26,7 @@ Reglas:
 | [Ajustes tras la revisión](2026-11-17-ajustes-revision.md) | Hecho | 1 (antes del 30/11) |
 | [IVA de los gastos: tipo por línea y si se deduce](2026-11-18-iva-de-los-gastos.md) | Hecho | 1 (antes de registrar gastos reales) |
 | [Puesta en marcha: permisos de Supabase, webhook y región](2026-11-18-puesta-en-marcha-ajustes.md) | Hecho | 1 (antes de crear las cuentas) |
-| [Lectura de facturas con Claude Sonnet 5.5 y errores visibles](2026-11-22-claude-sin-tool-choice.md) | Aprobado | 1 (bloquea gastos y facturas) |
+| [Lectura de facturas con Claude Sonnet 5.5 y errores visibles](2026-11-22-claude-sin-tool-choice.md) | Hecho | 1 (bloquea gastos y facturas) |
 
 ## Plantilla
 
