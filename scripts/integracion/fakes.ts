@@ -172,6 +172,14 @@ async function storageApi(req: http.IncomingMessage, res: http.ServerResponse, r
 async function claudeApi(req: http.IncomingMessage, res: http.ServerResponse) {
   const peticion = JSON.parse((await leer(req)).toString());
   peticionesClaude.push(peticion);
+  // Claude Sonnet 5.5 (y los demás modelos actuales) no admiten forzar una herramienta: el mismo
+  // 400 que da la API real, para que este error no pueda volver sin que fallen las pruebas.
+  if (peticion.tool_choice?.type === "tool" || peticion.tool_choice?.type === "any") {
+    return json(res, 400, {
+      type: "error",
+      error: { type: "invalid_request_error", message: `tool_choice: type "${peticion.tool_choice.type}" and "any" are not supported for this model.` },
+    });
+  }
   const paso = guionClaude.shift();
   if (!paso) return json(res, 500, { type: "error", error: { type: "api_error", message: "Guion de Claude agotado" } });
   const r = paso(peticion);
