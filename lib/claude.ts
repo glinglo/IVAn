@@ -17,13 +17,15 @@ async function llamar<T>(opts: {
 }): Promise<T> {
   const res = await ai().messages.create({
     model: env.anthropicModel,
-    max_tokens: 1500,
+    max_tokens: 8000,
     system: opts.system,
     output_config: {
+      effort: "low", // leer una factura no necesita pensar mucho, y así va más rápido
       format: { type: "json_schema", schema: { ...opts.esquema.schema, description: opts.esquema.descripcion } },
     },
     messages: [{ role: "user", content: opts.content }],
   });
+  if (res.stop_reason === "max_tokens") throw new Error("La respuesta de Claude se ha cortado (factura demasiado larga)");
   const bloque = res.content.find((b) => b.type === "text");
   if (!bloque || bloque.type !== "text") throw new Error("Claude no devolvió datos");
   let json: unknown;
