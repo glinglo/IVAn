@@ -189,16 +189,49 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
   - contraída, al pasar el ratón por un icono sale su nombre;
   - «Excel 2026» con el mismo estilo que las secciones.
 
-## Fase A.3 · Barra contraída uniforme (23/11/2026)
+## Fase A.3 · Barra contraída uniforme, menú de usuario y Configuración (23/11/2026)
 
-En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.2.**
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.2** (`Menu`, `SidebarNavUser` con `menu` e `initials`, y elementos contraídos iguales).
 
-1. `npm install @glinglo/vela-ds@0.4.2`.
-2. El usuario: `<SidebarNavUser name="Jose" initials="J" />`, **sin `onClick`**, para que sea una fila no interactiva. Fuera el `avatar={<span>J</span>}`.
+1. **`npm install @glinglo/vela-ds@0.4.2`.**
+2. **Menú de usuario** (decidido por Jose el 23/11/2026) con dos acciones:
+   - «Configuración» → `/ajustes`, icono `Settings`;
+   - «Cerrar sesión», icono `LogOut`, variante `danger`.
+
+   Dónde va:
+   - **Escritorio:** `<SidebarNavUser name="Jose" initials="J" menu={…} />` en el pie de la barra lateral.
+   - **Móvil** (no hay barra lateral): un círculo de 36 px con la «J» (`brand-100` / `brand-800`), con `aria-label="Menú de cuenta"`, a la derecha de la cabecera de cada página, junto al selector de año (`lg:hidden`). Abre el mismo `Menu` con `placement="bottom-end"`.
+
+   El selector de año y el menú se juntan en un componente de cliente, `components/AccionesCabecera.tsx`, que usan las páginas: así no cruza ninguna función desde el servidor. Los elementos del menú se definen en un solo sitio, `components/menuCuenta.tsx`.
+3. **Cerrar sesión:**
+   - `app/salir/route.ts` con **solo `POST`**: borra la cookie de sesión (mismo nombre, `path=/` y `maxAge: 0`) y responde `303` a `/sin-acceso?salida=1`;
+   - en el menú, `onSelect` hace `fetch("/salir", { method: "POST" })` y después `location.assign("/sin-acceso?salida=1")`;
+   - **no** usar `GET` para cerrar sesión: un enlace precargado podría cerrarla sin querer;
+   - `app/sin-acceso/page.tsx`: si llega `salida=1`, el título es «Has cerrado sesión» y se mantiene el texto de cómo volver a entrar con `/panel`.
+4. **Página `/ajustes` («Configuración»), solo lectura:** como todo el panel, no edita. Los cambios se siguen haciendo en el bot (`/ajustes …`).
+   - `PageHeader` «Configuración», sin selector de año.
+   - **«Tus datos»** (`ListGroup`): nombre, NIF, dirección, email y teléfono. El IBAN enmascarado: solo los 4 últimos dígitos, p. ej. `ES•• •••• •••• •••• •••• 1234`.
+   - **«Facturas»:**
+     - siguiente número (`serie` + `ultimo_numero + 1` con `digitos_numero`);
+     - quién emite: «Selfconta, hasta el {fecha}; IVAn solo registra» si hay modo paralelo (`modoParalelo` de `lib/externas.ts`), o «IVAn».
+   - **«Cuota de autónomo»:**
+     - la cuota por defecto (`cuota_autonomo_mensual`), en euros;
+     - cuántos meses hay registrados del año en curso (`cuotas_autonomo`).
+   - **«Bienes que se amortizan»:** de `bienes_inversion`, uno por fila (descripción, fecha de compra, base y % anual), con la amortización anual calculada como en `lib/calculo.ts` (**reutilizar la función, no recalcular**).
+   - **«Clientes»:** los activos, con país, tipo (UE sin IVA / nacional con IVA y retención) y `Badge` «falta dirección» si no la tienen.
+   - Al final, `NoticeStrip` sin contador: «Para cambiar algo, díselo al bot: /ajustes» → abre el bot en otra pestaña.
+   - **No mostrar `iva_compensar_inicial`:** los 755,53 € no aparecen hasta el plan del cierre del 4T.
+   - Página protegida por el layout del panel (`exigirSesion`), como las demás.
 
 **Comprueba:**
-- `npm test`, `npm run typecheck`, `next build` y `next start` con cada página dando 200.
-- En la vista previa, con la barra contraída: «Abrir el bot», el elemento activo y el hover son cuadrados del mismo tamaño. El usuario no se enfoca con Tab.
+- `npm test`, `npm run typecheck`, `next build` y `next start` con cada página dando 200, incluida `/ajustes`.
+- Con `curl -X POST` a `/salir`, la respuesta es `303` y trae `Set-Cookie` con la cookie de sesión caducada. Un `GET /salir` no cierra la sesión (405).
+- En la vista previa:
+  - con la barra contraída, «Abrir el bot», el activo y el hover son cuadrados iguales;
+  - el menú del usuario se abre hacia arriba (expandida) o a la derecha (contraída) y se maneja con el teclado (flechas, Enter y Esc);
+  - en móvil, la «J» de la cabecera abre el mismo menú;
+  - «Cerrar sesión» lleva a «Has cerrado sesión», y volver atrás no deja ver el panel;
+  - «Configuración» muestra los datos con el IBAN enmascarado.
 
 ## Fase B · Inicio = resultados y avisos
 
