@@ -292,3 +292,20 @@ En escritorio, lo mismo en filas `flex-wrap`:
 - `npm run typecheck`: sin errores (tras borrar `.next`, que tenía tipos cacheados de las rutas viejas).
 - `next build` en local con `GITHUB_PACKAGES_TOKEN` cargado: compila bien. Rutas generadas: `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/[anio]/[t]`, `/impuestos/[anio]/390`, más las de siempre.
 - Pendiente de Jose: revisar en el preview de Vercel las 4 pestañas, el bot central, la barra lateral a 1440 px, las redirecciones antiguas y el enlace `/panel` del bot a `/impuestos/2026/4` (no lo he podido probar sin desplegar).
+
+### Fase A.1 (23/11/2026, Claude Code, rama `plan/rediseno-a`)
+
+- Instalado `@glinglo/vela-ds@0.3.1`.
+- **Barra lateral con enlaces de verdad:** `components/PanelNav.tsx` ya no usa `window.location`; `SidebarNavItem` lleva `href` (con el `?anio=` calculado) y el `Button` de «Abrir el bot» también usa `href` en vez de `onClick`.
+- **«Abrir el bot» en otra pestaña:** `target="_blank"` en el `Button` de escritorio y en el `centerAction` del `TabBar` de móvil.
+- **`Paso.clave`:** añadida al tipo `Paso` en `lib/libro.ts` y rellenada en cada `pasos.push(...)` de `siguientesPasos` (`"plazo" | "gastos" | "facturar" | "iban" | "direccion" | "mac" | "cuota" | "verifactu"`), sin tocar el orden ni la lógica. El aviso de Impuestos en `app/(panel)/layout.tsx` ya no depende del texto: usa `pasos.find(p => p.clave === "plazo" && p.nivel !== "info")`, y de ahí saca también el trimestre (del `href` del paso, `/impuestos/{año}/{t}`) para el `badge` (`<Badge type="onhold">{t}T</Badge>`) de la barra lateral; en móvil se mantiene el punto (`TabBarItem` no tiene `badge`, solo `dot`). Test nuevo `tests/libro.test.ts` con la `clave` de cada paso, incluyendo los casos del 23/11, el 28/11 (facturar) y el 29/01 (plazo del 4T anterior).
+- **Barra lateral a todo el alto:** `sticky top-0 h-dvh overflow-y-auto` en el `className` de `SidebarNav`.
+- **Pie de la barra lateral:** `footer` de `SidebarNav` con el enlace «Excel {año}» (`/api/exportar?anio=`, con el año de la URL actual o el año en curso) y «Jose» con la inicial en un círculo `brand-100`.
+- **`aria-label` distintos:** «Secciones» en `SidebarNav` (escritorio) y «Secciones (móvil)» en `TabBar` (móvil), para que no choquen como referencia de accesibilidad.
+- `themeColor` en `app/layout.tsx`: `#F8FAFC` (`gray-50` de Vela), en vez de `#f6f5f2`.
+
+**Comprobaciones:**
+- `npm test`: 83 tests, 11 ficheros, todos en verde (añadido `tests/libro.test.ts`).
+- `npm run typecheck`: sin errores.
+- `npm run build` en local con `GITHUB_PACKAGES_TOKEN` cargado: compila bien.
+- Pendiente de Jose en el preview de Vercel a 1440 px: que la barra lateral llegue hasta abajo y quede fija al hacer scroll; que el clic central en «Ventas» la abra en otra pestaña; que «Abrir el bot» abra Telegram en otra pestaña; que Impuestos no muestre badge hoy (23/11, el 4T abre el 1 de enero).
