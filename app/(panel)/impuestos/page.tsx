@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro, resumenTrimestre } from "@/lib/libro";
 import { euros, hoyMadrid, trimestreDe } from "@/lib/fiscal";
-import { AnioDropdown } from "@/components/AnioDropdown";
+import { AccionesCabecera } from "@/components/AccionesCabecera";
 
 export default async function Impuestos({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const hoy = hoyMadrid();
@@ -14,7 +14,7 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Impuestos" subtitle={String(anio)} actions={<AnioDropdown anio={anio} anioActual={anioActual} />} />
+      <PageHeader title="Impuestos" subtitle={String(anio)} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
       <section className="card">
         <h2>Trimestres</h2>
         <div className="filas">

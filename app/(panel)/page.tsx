@@ -3,7 +3,7 @@ import { PageHeader } from "@glinglo/vela-ds";
 import { contextoPasos, cargarLibro, pygHasta, resumenTrimestre, siguientesPasos } from "@/lib/libro";
 import { euros, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Fila } from "@/components/Filas";
-import { AnioDropdown } from "@/components/AnioDropdown";
+import { AccionesCabecera } from "@/components/AccionesCabecera";
 
 export default async function Inicio({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const hoy = hoyMadrid();
@@ -23,7 +23,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
       <PageHeader
         title="Hola, Jose"
         subtitle={anio === anioActual ? `Tus resultados de ${anio}, hasta hoy` : `Tus resultados de ${anio} (año cerrado)`}
-        actions={<AnioDropdown anio={anio} anioActual={anioActual} />}
+        actions={<AccionesCabecera anio={anio} anioActual={anioActual} />}
       />
 
       <div className="kpis">

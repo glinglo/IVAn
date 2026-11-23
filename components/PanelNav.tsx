@@ -3,6 +3,7 @@
 import { usePathname, useSearchParams } from "next/navigation";
 import { SidebarNav, SidebarNavItem, SidebarNavUser, Badge, TabBar, type TabBarItem } from "@glinglo/vela-ds";
 import { House, TrendingUp, Receipt, Landmark, Send, Download } from "lucide-react";
+import { menuCuenta } from "./menuCuenta";
 
 const BOT_URL = "https://t.me/Ivanelgestorbot";
 
@@ -69,7 +70,7 @@ export function NavEscritorio({
           <SidebarNavItem icon={<Download size={16} />} href={`/api/exportar?anio=${anio}`}>
             Excel {anio}
           </SidebarNavItem>
-          <SidebarNavUser name="Jose" avatar={<span>J</span>} />
+          <SidebarNavUser name="Jose" initials="J" menu={menuCuenta} />
         </>
       }
     >

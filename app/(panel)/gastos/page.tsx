@@ -2,7 +2,7 @@ import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { euros, fechaES, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Chips, Fila } from "@/components/Filas";
-import { AnioDropdown } from "@/components/AnioDropdown";
+import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { db } from "@/lib/db";
 
 const corto: Record<string, string> = {
@@ -27,7 +27,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <PageHeader title="Gastos" subtitle={String(anio)} actions={<AnioDropdown anio={anio} anioActual={anioActual} />} />
+      <PageHeader title="Gastos" subtitle={String(anio)} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
       <Chips base="/gastos" actual={t} anio={anio} />
       <div className="kpis" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="kpi"><div className="etq">Gastado (base)</div><div className="valor">{euros(base)}</div></div>

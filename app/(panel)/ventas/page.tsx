@@ -2,7 +2,7 @@ import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { euros, fechaES, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Chips, Fila } from "@/components/Filas";
-import { AnioDropdown } from "@/components/AnioDropdown";
+import { AccionesCabecera } from "@/components/AccionesCabecera";
 
 export default async function Ventas({ searchParams }: { searchParams: Promise<{ anio?: string; t?: string }> }) {
   const sp = await searchParams;
@@ -16,7 +16,7 @@ export default async function Ventas({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <PageHeader title="Ventas" subtitle={String(anio)} actions={<AnioDropdown anio={anio} anioActual={anioActual} />} />
+      <PageHeader title="Ventas" subtitle={String(anio)} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
       <Chips base="/ventas" actual={t} anio={anio} />
       <div className="kpis" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="kpi"><div className="etq">Facturado (base)</div><div className="valor">{euros(base)}</div></div>

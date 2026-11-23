@@ -419,3 +419,28 @@ En escritorio, lo mismo en filas `flex-wrap`:
 - `npm run build`: compila bien con Turbopack y Next 16.4.6.
 - `npm run start` + `curl` con una cookie de sesión válida generada con `crearToken("sesion")` de `lib/sesion.ts` (sin tocar datos reales): `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4` e `/impuestos/2026/390` dan todas `200`.
 - Pendiente de Jose en el preview de Vercel: a 390 px, que la barra fija abajo deje ver el final del contenido con el avión de papel en el centro; a 1440 px, los iconos nuevos y que el botón junto al logo contraiga/expanda la barra y lo recuerde al recargar; contraída, que el tooltip con el nombre salga al pasar el ratón; que «Excel 2026» tenga el mismo aspecto que las secciones.
+
+### Fase A.3 (23/11/2026, Claude Code, rama `plan/rediseno-a`)
+
+- Instalado `@glinglo/vela-ds@0.4.2`.
+- **Menú de cuenta en un solo sitio:** `components/menuCuenta.tsx` (datos, no componente) con los dos `MenuItem` de Vela: «Configuración» (`href="/ajustes"`, icono `Settings`) y «Cerrar sesión» (icono `LogOut`, `variant: "danger"`, `onSelect` hace el `fetch` + `location.assign`).
+- **Escritorio:** en `components/PanelNav.tsx`, `SidebarNavUser` pasa de `avatar={<span>J</span>}` a `initials="J"` y `menu={menuCuenta}` (ya en Vela 0.4.2).
+- **Móvil:** `components/AccionesCabecera.tsx` (nuevo, cliente) junta el `Dropdown` de año (lo que antes era `components/AnioDropdown.tsx`, que desaparece) y el círculo de 36 px con la «J» (`aria-label="Menú de cuenta"`, oculto en escritorio con `lg:hidden`) que abre el mismo `Menu` con `placement="bottom-end"`. Sustituye a `AnioDropdown` en las 4 páginas que ya lo usaban (Inicio, Ventas, Gastos, Impuestos) y se usa también en `/ajustes`, sin año (ahí solo pone el círculo), porque es la única forma de llegar al menú de cuenta en móvil, que no tiene barra lateral. **No se ha tocado** `/impuestos/[anio]/[t]` ni `/impuestos/[anio]/390`: sus cabeceras llevan `back`, no selector de año, y rediseñarlas es de la fase D; se apunta aquí para que no se dé por hecho que ya tienen el menú de cuenta en móvil.
+- **Cerrar sesión:** `app/salir/route.ts`, con solo `export async function POST`: borra la cookie `ivan_sesion` (`maxAge: 0`, mismo `path`) y responde `303` a `/sin-acceso?salida=1`. Sin `GET`, así que un `GET` da `405` por defecto de Next. `app/sin-acceso/page.tsx` ahora es async, lee `searchParams.salida` y cambia el título a «Has cerrado sesión» si viene `salida=1` (el texto de cómo volver a entrar no cambia).
+- **`/ajustes` (nueva página, solo lectura):** `PageHeader` «Configuración» sin año. Usa `ListGroup`/`ListItem`/`Badge` de Vela:
+  - «Tus datos»: nombre, NIF, dirección, email, teléfono e IBAN enmascarado (función `ibanEnmascarado`, deja los 4 últimos dígitos y agrupa de 4 en 4 como el IBAN real, sea cual sea su longitud).
+  - «Facturas»: `siguienteNumero(ajustes)` de `lib/externas.ts`, y quién emite con `modoParalelo(ajustes, hoy)`.
+  - «Cuota de autónomo»: `ajustes.cuota_autonomo_mensual` y los meses con cuota registrada este año (`count` de `cuotas_autonomo`).
+  - «Bienes que se amortizan»: `db().from("bienes_inversion").select(...)` con la `descripcion` (que no está en `DatosCalc`/`cargarLibro`, solo se necesita aquí); la amortización anual de cada bien se calcula con `amortizacionDelAnio([bien], "{año}-12-31")` de `lib/calculo.ts`, reutilizada tal cual, no recalculada a mano.
+  - «Clientes»: `getClientes()` (ya filtra activos), con país, el tipo en texto y `Badge type="onhold"` «falta dirección» si no la tienen.
+  - **No se muestra `iva_compensar_inicial`** (los 755,53 €), como pide el plan.
+  - **`NoticeStrip` final sin contador:** Vela 0.4.2 solo tiene `NoticeStrip` con `count: number` obligatorio, sin variante sin contador. En vez de forzar un número que no significa nada, se ha dejado un `<section className="card">` con un enlace al bot, con el mismo texto del plan. Se apunta aquí por si Vela añade una variante sin contador más adelante: lo propio sería cambiarlo entonces.
+  - Protegida como las demás: dentro de `app/(panel)/`, pasa por el `exigirSesion()` del layout.
+
+**Comprobaciones:**
+- `npm test`: 83 tests, 11 ficheros, todos en verde (sin tests nuevos: esta fase no toca `lib/libro.ts` ni `lib/calculo.ts`).
+- `npm run typecheck`: sin errores.
+- `npm run build`: compila bien; rutas generadas incluyen `/ajustes` y `/salir` (dinámicas).
+- `npm run start` en el puerto 3917 (3000 y 3100 estaban ocupados por otros procesos de este Mac, no relacionados con IVAn) + `curl` con una cookie de sesión válida (generada igual que en la fase A.2, sin tocar datos reales): `/`, `/ventas`, `/gastos`, `/impuestos`, `/ajustes`, `/impuestos/2026/4` e `/impuestos/2026/390` dan todas `200`.
+- `curl -X POST http://localhost:3917/salir`: `303` a `/sin-acceso?salida=1` con `Set-Cookie: ivan_sesion=; Path=/; Max-Age=0`. `curl http://localhost:3917/salir` (GET): `405`.
+- Pendiente de Jose en el preview de Vercel (no se puede comprobar sin desplegar): que con la barra contraída «Abrir el bot», el activo y el hover sean cuadrados iguales; que el menú de usuario se abra hacia arriba (expandida) o a la derecha (contraída) y se maneje con el teclado (flechas, Enter, Esc); que en móvil la «J» de la cabecera abra el mismo menú; que «Cerrar sesión» lleve a «Has cerrado sesión» y que volver atrás no deje ver el panel; que «Configuración» muestre los datos con el IBAN enmascarado.
