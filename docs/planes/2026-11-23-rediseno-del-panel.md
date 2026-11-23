@@ -140,6 +140,36 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
   - «Abrir el bot» abre Telegram en otra pestaña;
   - Impuestos muestra el badge solo si hay plazo abierto (hoy, 23/11, no lo hay: el 4T abre el 1 de enero).
 
+## Fase A.2 · Retoques tras la revisión visual (23/11/2026)
+
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. Lo que vio Jose en la vista previa:
+
+1. **La barra inferior móvil no está fija:** se coloca como una columna más, a la derecha del contenido.
+   - Envolver la `TabBar` en un contenedor `fixed inset-x-0 bottom-0 z-40 lg:hidden`.
+   - Al `<main>`, padding inferior para que la barra no tape el final: `pb-[calc(96px+env(safe-area-inset-bottom))]` en móvil y `lg:pb-10` en escritorio.
+   - Comprobar a 390 px que la barra queda abajo y se ve el final de la página.
+2. **La barra lateral es estrecha** (≈180 px). Ancho fijo de **240 px** (`w-60 shrink-0`), como en el lienzo.
+3. **Iconos como en el lienzo,** con `lucide-react` (el mismo set que usa Vela; añadirlo como dependencia con la misma versión mayor que Vela):
+
+   | Sección | Icono |
+   |---|---|
+   | Inicio | `House` |
+   | Ventas | `TrendingUp` |
+   | Gastos | `Receipt` |
+   | Impuestos | `Landmark` |
+   | Bot | `Send` (avión de papel, Telegram; el de ahora parece un candado) |
+
+   20 px en la barra inferior, 16 px en la lateral y 22 px en el botón central. Fuera los `path` dibujados a mano de `PanelNav.tsx`.
+4. **Pie de la barra lateral:**
+   - «Excel {año}» pasa a ser un `SidebarNavItem` con `href` e icono `Download` (hoy es un `<a>` sin estilo). Se adelanta desde la fase B.
+   - El usuario: una fila con la inicial en un círculo de 24 px `brand-100` / `brand-800` y «Jose» en `text-row`. No es un botón: aún no hay menú.
+
+**Comprueba:**
+- `npm test` y `npm run typecheck`.
+- En la vista previa:
+  - a 390 px, la barra fija abajo con el avión de papel en el centro y el contenido completo por encima;
+  - a 1440 px, la barra lateral de 240 px con los iconos nuevos y «Excel 2026» con el mismo estilo que las secciones.
+
 ## Fase B · Inicio = resultados y avisos
 
 **Datos** (funciones nuevas puras en `lib/libro.ts`, con tests en `tests/`; sin tocar `calculo.ts`):
