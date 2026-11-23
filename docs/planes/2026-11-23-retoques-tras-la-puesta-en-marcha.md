@@ -1,6 +1,6 @@
 # Retoques tras la puesta en marcha: aviso de fin de mes con gastos, y tres arreglos pequeños
 
-Estado: Aprobado (Jose, 23/11/2026)
+Estado: Hecho (Jose, 23/11/2026)
 23/11/2026 · Plan de Claude (proyecto IVAn)
 **Antes del 28/11**, que es cuando sale el primer aviso de fin de mes.
 
@@ -75,4 +75,57 @@ IVAn está en marcha desde el 22/11. Jose quiere usar el aviso de fin de mes tam
 
 ## Notas de ejecución
 
-(Las rellena Claude Code.)
+Ejecutado el 23/11/2026, sin desviaciones. `npm test` (78/78) y `npm run typecheck` pasan.
+
+**Comprobación con la API real de los cambios de `llamar()` (punto obligatorio del plan):** con
+`max_tokens: 8000` y `output_config.effort: "low"` junto a `output_config.format` de tipo
+`json_schema`, una llamada de prueba a `claude-sonnet-5-5` (texto «Responde ok=true», sin datos
+personales) devolvió `stop_reason: "end_turn"` y `thinking_tokens: 0`: el esfuerzo bajo sí se
+puede combinar con structured outputs y, como se esperaba, evita el pensamiento por defecto. El
+error nuevo (`stop_reason === "max_tokens"` → «La respuesta de Claude se ha cortado (factura
+demasiado larga)») se probó con un servidor HTTP de pruebas local que simula la API
+(`tests/claude-max-tokens.test.ts`), no con la API real (no hay forma de pedirle a Claude que corte
+la respuesta a propósito sin gastar una respuesta enorme).
+
+**Lista de proveedores que saldría el 28/11/2026 con los datos reales** (consulta de solo lectura a
+la Supabase real, `gastos` desde el 1/8/2026 hasta hoy, sin estado "descartado"; solo nombres de
+proveedor, nada de importes ni NIF de clientes): de los **7 gastos** que hay cargados en IVAn hasta
+ahora (puesta en marcha el 22/11, así que casi todo lo de agosto-octubre de Selfconta aún no está
+aquí),
+- **Faltan** (recurrentes, sin nada en noviembre): **Anthropic, PBC** · **Apify Technologies
+  s.r.o.**
+- **Nuevos el mes pasado:** ninguno.
+
+Con tan pocos gastos cargados, esta lista es poco representativa todavía: según
+`docs/CONTEXTO.md`, Cursor, Figma, Google Cloud, Framer, Zoho, Fly.io, Cloudflare, Replit y Meta
+también deberían salir como recurrentes en cuanto Jose cargue los gastos de agosto a octubre que
+llevaba Selfconta (ahora mismo no están en IVAn). Jose decide si merece la pena cargarlos antes del
+28/11 para que el aviso sea útil ya este mes, o esperar a que se complete solo con los próximos
+meses.
+
+Archivos tocados:
+- `lib/fiscal.ts`: `nombreMes()` (nombre del mes en español) y `mesAnterior()` ("2026-11" →
+  "2026-10"), funciones puras de fecha junto a las demás.
+- `lib/recordatorios.ts`: `proveedoresQueFaltan(gastos, hoy)`, pura, con `normalizarProveedor()` y
+  `claveProveedor()` (por NIF si lo hay, si no por nombre normalizado) como ayudantes internos.
+- `lib/cron.ts`: `textoFinDeMes()` construye el aviso nuevo (factura según el modo + gastos
+  recurrentes que faltan + nuevos del mes pasado); `avisoBorradores()` (antes esa cuenta solo salía
+  dentro de `resumenTrimestre`, ahora también en el aviso de fin de mes, una sola vez por mensaje
+  aunque coincidan los dos avisos el mismo día); `lista()` corta en 12 con «y N más».
+- `scripts/set-webhook.ts`: todo el cuerpo envuelto en un `try`; `sinSecretos()` relanza solo
+  `.message` del error (que en un `GrammyError` ya viene sin el `payload`: «Call to 'setWebhook'
+  failed! (401: Unauthorized)»), nunca el objeto entero. Comprobado a mano con un token falso contra
+  la API real de Telegram: el error sale igual que en el plan y el secreto no aparece por ningún
+  lado (ni en el mensaje ni en el stack).
+- `lib/claude.ts`: `llamar()` con `max_tokens: 8000`, `output_config.effort: "low"`, y el error
+  nuevo si `stop_reason === "max_tokens"`.
+- `tests/recordatorios.test.ts` (nuevo): toda la tabla de casos del plan, más NIF y gasto
+  descartado.
+- `tests/claude-max-tokens.test.ts` (nuevo): servidor de pruebas local con `stop_reason`
+  simulado.
+- `scripts/integracion/conversaciones.ts`: el caso del aviso de fin de mes en modo paralelo ahora
+  comprueba las dos partes (factura + gastos) y el aviso de borradores (se inserta un borrador
+  suelto para que la cuenta no dependa de lo que haya quedado de otros casos).
+
+**Integración con Postgres real** (`~/.ivan-pg-pruebas`, Postgres 16 + PostgREST): **56/56**. `npm
+test` 78/78 y `npm run typecheck` limpio. No cambia ninguna cifra de 2026.

@@ -769,11 +769,17 @@ async function main() {
     assert.ok(numeros.includes("00340") && numeros.includes("00341"), JSON.stringify(numeros));
   });
 
-  await caso("Aviso de fin de mes en modo paralelo: hacerla en Selfconta", async () => {
+  await caso("Aviso de fin de mes en modo paralelo: hacerla en Selfconta, con gastos y borradores", async () => {
     const { ejecutarRecordatorios } = await import("@/lib/cron");
+    // Un borrador suelto para comprobar que el aviso también avisa de los gastos sin confirmar.
+    await db().from("gastos").insert({ proveedor: "Prueba suelta", base: 1, iva: 0, tipo: "IVA soportado", estado: "borrador" });
     const textos: string[] = [];
     await ejecutarRecordatorios(async (t) => void textos.push(t), "2026-12-28");
-    assert.match(textos.join("\n"), /Hazla en Selfconta y mándame el PDF/);
+    const t = textos.join("\n");
+    assert.match(t, /Fin de diciembre/);
+    assert.match(t, /1\. Factura: hazla en Selfconta y mándame el PDF\. \(En modo normal: «\/factura Zapflow 3060»\.\)/);
+    assert.match(t, /2\. Gastos: mándame todas las facturas de gasto de diciembre/);
+    assert.match(t, /⚠️ Tienes \d+ gasto\(s\) sin confirmar en el chat\./);
   });
 
   // ===== Fase 2: copia de seguridad =====

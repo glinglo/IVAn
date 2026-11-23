@@ -1,4 +1,4 @@
-import { diasEntre, fechaES, plazoAbierto, rangoTrimestre, trimestreDe } from "./fiscal";
+import { diasEntre, fechaES, mesAnterior, plazoAbierto, rangoTrimestre, trimestreDe } from "./fiscal";
 
 export interface Aviso {
   clave: string; // para no repetirlo
@@ -68,5 +68,76 @@ export function avisosDeHoy(hoy: string, enviados: Set<string>): Aviso[] {
 export function trimestreActual(hoy: string) {
   const { anio, t } = trimestreDe(hoy);
   return { anio, t, ...rangoTrimestre(anio, t) };
+}
+
+// ---------- Proveedores que faltan a fin de mes ----------
+
+export interface GastoProveedor {
+  proveedor: string | null;
+  nif: string | null;
+  fecha: string;
+  estado: "borrador" | "confirmado" | "descartado";
+}
+
+/** Sin mayúsculas, sin formas jurídicas (S.L., Inc., Ltd, B.V....) y sin espacios de más. */
+function normalizarProveedor(nombre: string): string {
+  return nombre
+    .toUpperCase()
+    .replace(/[.,]/g, " ")
+    .replace(/\b(S\s?L\s?U?|S\s?A|S\s?COOP|INC|LTD|LLC|L\s?L\s?P|B\s?V|GMBH|CORP|CO|PLC|OY|AB|AS|AG)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function claveProveedor(g: { proveedor: string | null; nif: string | null }): string | null {
+  if (g.nif) return g.nif.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const n = normalizarProveedor(g.proveedor ?? "");
+  return n || null;
+}
+
+/**
+ * Proveedores que suelen llegar cada mes y de los que aún no hay factura del mes en curso, y los
+ * que empezaron a llegar el mes pasado. Pura: recibe los gastos de los últimos 4 meses (el actual y
+ * los 3 anteriores), de cualquier estado salvo descartado.
+ * - Recurrente: al menos un gasto confirmado en 2 de los 3 meses anteriores al actual.
+ * - Falta: recurrente y sin ningún gasto (confirmado o en borrador) en el mes en curso.
+ * - Nuevo el mes pasado: un gasto confirmado en el mes anterior, ninguno en los dos de antes, y
+ *   ninguno todavía en el mes en curso.
+ */
+export function proveedoresQueFaltan(gastos: GastoProveedor[], hoy: string): { faltan: string[]; nuevos: string[] } {
+  const mesActual = hoy.slice(0, 7);
+  const m1 = mesAnterior(mesActual);
+  const m2 = mesAnterior(m1);
+  const m3 = mesAnterior(m2);
+
+  const porProveedor = new Map<string, { nombre: string; confirmados: Set<string>; cualquiera: Set<string> }>();
+  for (const g of gastos) {
+    if (g.estado === "descartado") continue;
+    const clave = claveProveedor(g);
+    if (!clave) continue;
+    const mes = g.fecha.slice(0, 7);
+    let e = porProveedor.get(clave);
+    if (!e) {
+      e = { nombre: g.proveedor ?? clave, confirmados: new Set(), cualquiera: new Set() };
+      porProveedor.set(clave, e);
+    }
+    e.cualquiera.add(mes);
+    if (g.estado === "confirmado") e.confirmados.add(mes);
+  }
+
+  const faltan: string[] = [];
+  const nuevos: string[] = [];
+  for (const e of porProveedor.values()) {
+    if (e.cualquiera.has(mesActual)) continue;
+    const mesesRecurrentes = [m1, m2, m3].filter((m) => e.confirmados.has(m)).length;
+    if (mesesRecurrentes >= 2) {
+      faltan.push(e.nombre);
+    } else if (e.confirmados.has(m1) && !e.confirmados.has(m2) && !e.confirmados.has(m3)) {
+      nuevos.push(e.nombre);
+    }
+  }
+  faltan.sort((a, b) => a.localeCompare(b));
+  nuevos.sort((a, b) => a.localeCompare(b));
+  return { faltan, nuevos };
 }
 

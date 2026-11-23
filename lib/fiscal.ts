@@ -203,6 +203,21 @@ export const fechaES = (iso: string) => {
   return `${d}/${m}/${y}`;
 };
 
+const NOMBRES_MES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "2026-11-23" → "noviembre" */
+export function nombreMes(iso: string): string {
+  return NOMBRES_MES[Number(iso.slice(5, 7)) - 1];
+}
+
+/** "2026-11" → "2026-10" */
+export function mesAnterior(mes: string): string {
+  return sumarDias(`${mes}-01`, -1).slice(0, 7);
+}
+
 /** 3060.5 → "3.060,50 €" (sin espacios especiales, para que el PDF lo pueda pintar). */
 export function euros(n: number): string {
   const [ent, dec] = Math.abs(round2(n)).toFixed(2).split(".");
