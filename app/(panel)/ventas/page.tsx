@@ -1,10 +1,13 @@
+import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { euros, fechaES, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Chips, Fila } from "@/components/Filas";
+import { AnioDropdown } from "@/components/AnioDropdown";
 
 export default async function Ventas({ searchParams }: { searchParams: Promise<{ anio?: string; t?: string }> }) {
   const sp = await searchParams;
-  const anio = Number(sp.anio ?? hoyMadrid().slice(0, 4));
+  const anioActual = Number(hoyMadrid().slice(0, 4));
+  const anio = Number(sp.anio ?? anioActual);
   const t = sp.t ? Number(sp.t) : null;
   const libro = await cargarLibro(anio);
   const facturas = libro.facturas.filter((f) => !t || trimestreDe(f.fecha).t === t);
@@ -13,10 +16,7 @@ export default async function Ventas({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <div className="cabecera">
-        <h1>Ventas</h1>
-        <span className="sub">{anio}</span>
-      </div>
+      <PageHeader title="Ventas" subtitle={String(anio)} actions={<AnioDropdown anio={anio} anioActual={anioActual} />} />
       <Chips base="/ventas" actual={t} anio={anio} />
       <div className="kpis" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="kpi"><div className="etq">Facturado (base)</div><div className="valor">{euros(base)}</div></div>

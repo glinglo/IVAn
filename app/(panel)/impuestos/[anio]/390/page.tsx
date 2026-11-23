@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { modelo390 } from "@/lib/calculo";
 import { euros, fechaES, hoyMadrid, plazoTrimestral } from "@/lib/fiscal";
@@ -28,10 +29,7 @@ export default async function Anual({
   } catch (e) {
     return (
       <>
-        <div className="cabecera">
-          <h1>390 · {anio}</h1>
-          <span className="sub"><Link href={`/trimestre/${anio}/4`}>‹ 4T</Link></span>
-        </div>
+        <PageHeader title={`390 · ${anio}`} back={{ label: "4T", href: `/impuestos/${anio}/4` }} />
         <section className="card">
           <p>⛔ {e instanceof Error ? e.message : String(e)}</p>
         </section>
@@ -43,10 +41,7 @@ export default async function Anual({
 
   return (
     <>
-      <div className="cabecera">
-        <h1>390 · {anio}</h1>
-        <span className="sub"><Link href={`/trimestre/${anio}/4`}>‹ 4T</Link></span>
-      </div>
+      <PageHeader title={`390 · ${anio}`} back={{ label: "4T", href: `/impuestos/${anio}/4` }} />
       <p className="nota">
         Resumen anual de IVA. Plazo: hasta el {fechaES(plazo.fin)}, junto al 303 del 4T. Es la suma de tus cuatro 303
         del año, así que no sale nada nuevo a pagar. Cuando lo presentes, díselo a IVAn: «presentado el 390».
@@ -142,9 +137,9 @@ export default async function Anual({
             El 303 del 4T sale a tu favor ({euros(-t4.c71)}). En el 4T puedes pedir que te lo devuelvan o dejarlo para compensar en
             2027; el 390 tiene que decir lo mismo que marques en el 303.{" "}
             {ultimo === "compensar" ? (
-              <Link href={`/anual/${anio}?ultimo=devolver`}>Ver con devolución ›</Link>
+              <Link href={`/impuestos/${anio}/390?ultimo=devolver`}>Ver con devolución ›</Link>
             ) : (
-              <Link href={`/anual/${anio}`}>Ver con compensación ›</Link>
+              <Link href={`/impuestos/${anio}/390`}>Ver con compensación ›</Link>
             )}
           </p>
         ) : null}

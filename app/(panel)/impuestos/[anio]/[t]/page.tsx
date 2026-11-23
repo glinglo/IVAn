@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro, resumenTrimestre } from "@/lib/libro";
 import { euros, fechaES, plazoTrimestral } from "@/lib/fiscal";
 import { Tabla } from "@/components/Casillas";
@@ -17,10 +18,7 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
 
   return (
     <>
-      <div className="cabecera">
-        <h1>{t}T {anio}</h1>
-        <span className="sub"><Link href={`/?anio=${anio}`}>‹ Inicio</Link></span>
-      </div>
+      <PageHeader title={`${t}T ${anio}`} back={{ label: "Impuestos", href: `/impuestos?anio=${anio}` }} />
       <p className="nota">
         Plazo: del {fechaES(plazo.apertura)} al {fechaES(plazo.fin)} (domiciliación hasta aprox. el {fechaES(plazo.finDomiciliacion)}).
         Cuando lo presentes, díselo a IVAn: «presentado el 303 del {t}T, {euros(m303.c71)}».
@@ -101,7 +99,7 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
           <h2>Modelo 390 · resumen anual de IVA</h2>
           <p className="nota">Se presenta en el mismo plazo que el 303 del 4T.</p>
           <p>
-            <Link href={`/anual/${anio}`}>Ver las casillas del 390 de {anio} ›</Link>
+            <Link href={`/impuestos/${anio}/390`}>Ver las casillas del 390 de {anio} ›</Link>
           </p>
         </section>
       ) : null}

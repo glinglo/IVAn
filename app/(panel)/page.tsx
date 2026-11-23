@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { PageHeader } from "@glinglo/vela-ds";
 import { contextoPasos, cargarLibro, pygHasta, resumenTrimestre, siguientesPasos } from "@/lib/libro";
 import { euros, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Fila } from "@/components/Filas";
+import { AnioDropdown } from "@/components/AnioDropdown";
 
 export default async function Inicio({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const hoy = hoyMadrid();
@@ -18,13 +20,11 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <div className="cabecera">
-        <h1>{anio}</h1>
-        <span className="sub">
-          {anio === anioActual ? `hasta hoy, ${hoy.split("-").reverse().join("/")}` : "año cerrado"} ·{" "}
-          <Link href={`/?anio=${anio === anioActual ? anio - 1 : anioActual}`}>{anio === anioActual ? anio - 1 : anioActual}</Link>
-        </span>
-      </div>
+      <PageHeader
+        title="Hola, Jose"
+        subtitle={anio === anioActual ? `Tus resultados de ${anio}, hasta hoy` : `Tus resultados de ${anio} (año cerrado)`}
+        actions={<AnioDropdown anio={anio} anioActual={anioActual} />}
+      />
 
       <div className="kpis">
         <div className="kpi">
@@ -76,7 +76,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
             .map((x) => {
               const hecho = x.presentado("303") && x.presentado("130");
               return (
-                <Link key={x.t} href={`/trimestre/${anio}/${x.t}`} className="fila">
+                <Link key={x.t} href={`/impuestos/${anio}/${x.t}`} className="fila">
                   <div className="izq">
                     <div className="tit">
                       {x.t}T {hecho ? <span className="badge ok">presentado</span> : x.t === tActual && anio === anioActual ? <span className="badge">en curso</span> : <span className="badge warn">pendiente</span>}

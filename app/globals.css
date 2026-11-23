@@ -1,3 +1,29 @@
+@import "tailwindcss";
+@import "@glinglo/vela-ds/theme.css";
+@source "../node_modules/@glinglo/vela-ds/dist";
+
+@theme {
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --color-brand-50:  #FBF9FF; --color-brand-100: #F5EFFF; --color-brand-200: #ECE0FF;
+  --color-brand-300: #E0CDFF; --color-brand-400: #D2B8FF; --color-brand-500: #C1A9EE;
+  --color-brand-600: #9B84C8; --color-brand-700: #7865A2; --color-brand-800: #5D4E7F;
+  --color-brand-900: #453B60; --color-brand-950: #28223A;
+}
+:root {
+  --color-text-btn-primary:          var(--color-gray-950);  /* 9,78:1 sobre 500 */
+  --color-text-nav-item-active:      var(--color-brand-800); /* 6,53:1 sobre 100 */
+  --color-text-link-secondary:       var(--color-brand-700); /* 5,02:1 */
+  --color-text-link-secondary-hover: var(--color-brand-800);
+  --color-text-brand:                var(--color-brand-700);
+  --color-focus-ring:                var(--color-brand-700);
+  --color-bg-badge-onhold:   var(--color-yellow-100);
+  --color-text-badge-onhold: var(--color-yellow-800);  /* 6,38:1 */
+  --color-bg-alert-help:     var(--color-yellow-100);
+  --color-text-alert-help:   var(--color-yellow-800);
+  --color-text-link-help:       var(--color-yellow-700);
+  --color-text-link-help-hover: var(--color-yellow-800);
+}
+
 :root {
   --bg: #f6f5f2;
   --card: #ffffff;

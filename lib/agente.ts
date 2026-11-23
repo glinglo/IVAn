@@ -160,7 +160,7 @@ async function ejecutar(nombre: string, e: Entrada, acciones: Acciones): Promise
       return {
         anio,
         provisional: hoy <= `${anio}-12-31`,
-        enlace_panel: enlacePanel(`/anual/${anio}`),
+        enlace_panel: enlacePanel(`/impuestos/${anio}/390`),
         casillas,
       };
     }

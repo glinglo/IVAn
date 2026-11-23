@@ -244,4 +244,19 @@ En escritorio, lo mismo en filas `flex-wrap`:
 
 ## Notas de ejecución
 
-(Las rellena Claude Code, una sección por fase.)
+### Fase A (23/11/2026, Claude Code, rama `plan/rediseno-a`)
+
+- Instalado `@glinglo/vela-ds@0.3.0`, `tailwindcss` y `@tailwindcss/postcss`. `.npmrc` añadido tal cual el plan (sin token).
+- `app/globals.css`: añadido el bloque de Tailwind v4 + tema Vela + marca lila delante del CSS antiguo, que sigue intacto (conviven hasta la fase E).
+- Inter cargado con `next/font/google` en `app/layout.tsx`, con `variable: "--font-inter"` en el `<html>`.
+- **Rutas:** `/trimestre/[anio]/[t]` → `/impuestos/[anio]/[t]`; `/anual/[anio]` → `/impuestos/[anio]/390`. Creada además `/impuestos` (índice), que no existía antes: muestra la lista de trimestres (igual que hacía Inicio) y un enlace al 390, con su `PageHeader`. Redirecciones (no permanentes) en `next.config.ts` para las rutas antiguas. Actualizados los enlaces internos: `href` de `siguientesPasos` en `lib/libro.ts`, `enlacePanel` en `lib/agente.ts`, y los enlaces cruzados entre las páginas de trimestre/390. `rutaSegura` no necesitó cambios (ya aceptaba las rutas nuevas).
+- **Navegación:** `components/PanelNav.tsx` (nuevo, cliente) con `NavMovil` (`TabBar` de Vela, bot en el centro con `centerAction`, oculta en escritorio con `lg:hidden`) y `NavEscritorio` (`SidebarNav` de Vela con el botón «Abrir el bot» arriba, oculta en móvil con `hidden lg:flex`). El punto amarillo de Impuestos usa la misma condición que el primer paso de `siguientesPasos` (texto que empieza por «Presentar»), calculada en `app/(panel)/layout.tsx` con `contextoPasos`. El layout ya no usa el `Nav` viejo (`components/Nav.tsx` queda sin usar; el plan pide borrarlo en la fase E, así que no lo he tocado).
+- **Año en la navegación:** `components/AnioDropdown.tsx` (nuevo, cliente, `Dropdown` de Vela) añadido como `actions` del `PageHeader` en Inicio, Ventas, Gastos e Impuestos; navega conservando la ruta actual. La `TabBar`/`SidebarNav` llevan el `?anio=` de la página actual si no es el año en curso (función `enlaces()` en `PanelNav.tsx`).
+- **PageHeader en las 4 secciones:** sustituido el `<div className="cabecera">` de Inicio, Ventas y Gastos por `PageHeader`; el resto del contenido de cada página sigue igual (se rediseña en las fases B y C). Las páginas de trimestre y 390 también usan `PageHeader` con `back`.
+- `Button` de Vela no tiene `asChild`: el botón «Abrir el bot» de `NavEscritorio` usa `onClick` con `window.location.href` en vez de envolver un `<a>`.
+
+**Comprobaciones:**
+- `npm test`: 78 tests, 10 ficheros, todos en verde.
+- `npm run typecheck`: sin errores (tras borrar `.next`, que tenía tipos cacheados de las rutas viejas).
+- `next build` en local con `GITHUB_PACKAGES_TOKEN` cargado: compila bien. Rutas generadas: `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/[anio]/[t]`, `/impuestos/[anio]/390`, más las de siempre.
+- Pendiente de Jose: revisar en el preview de Vercel las 4 pestañas, el bot central, la barra lateral a 1440 px, las redirecciones antiguas y el enlace `/panel` del bot a `/impuestos/2026/4` (no lo he podido probar sin desplegar).

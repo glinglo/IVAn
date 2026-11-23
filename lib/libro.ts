@@ -182,7 +182,7 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
       detalle: abierto
         ? `Quedan ${quedan} días (hasta el ${plazo.fin.split("-").reverse().join("/")})`
         : `Se presenta del ${plazo.apertura.split("-").reverse().join("/")} al ${plazo.fin.split("-").reverse().join("/")}`,
-      href: `/trimestre/${plazo.anio}/${plazo.t}`,
+      href: `/impuestos/${plazo.anio}/${plazo.t}`,
     });
     break;
   }
