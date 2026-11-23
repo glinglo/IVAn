@@ -25,6 +25,15 @@ Si una pantalla del lienzo y este plan no coinciden, manda el plan. Apúntalo en
 - **Los 755,53 € no aparecen** hasta el plan del cierre del 4T.
 - Sesión: `exigirSesion()` en el layout y los enlaces firmados de `/acceso`.
 
+## Regla técnica: Vela en páginas de servidor (desde Vela 0.4.1)
+
+Vela es un paquete de **componentes de cliente** (`"use client"`). Las páginas de IVAn son de servidor y pueden pintarlos, pero **solo pasándoles datos** (texto, números, fechas, arrays, elementos JSX), **nunca funciones**.
+
+- Una función que llega a un componente de Vela desde una página de servidor (`format` de `Waterfall`/`BarChart`, `onChange` de `SegmentedControl`, `onClose` de `Sheet`, `onDismiss` de `NoticeCard`, cualquier `onClick`…) **compila bien con `next build`**, pero la página da **error 500** al abrirse: «Functions cannot be passed directly to Client Components». Comprobado el 23/11/2026 con Next 16.4.6.
+- Si hace falta una función, el componente de Vela va dentro de un componente propio de IVAn con `"use client"` (como `components/AnioDropdown.tsx` y `components/PanelNav.tsx`), y la página le pasa solo los datos. Ejemplos: `components/Cascada.tsx` (con el `format` de euros dentro), `components/AvisosInicio.tsx` (franja, drawer y ocultar la tarjeta) y `components/Periodo.tsx` (selector que cambia la URL).
+- `cn` en código de servidor se importa desde `@glinglo/vela-ds/utils`.
+- **Comprobación de cada fase, además de `next build`:** `next start` en local y `curl -s -o /dev/null -w "%{http_code}"` a cada página de la fase con una cookie de sesión válida (o comprobarlo en la vista previa). Todas tienen que dar `200`. Si una da `500`, mirar el registro: casi seguro es una función que cruza al cliente.
+
 ## Decisiones (Jose, 23/11/2026)
 
 - **Navegación:**
