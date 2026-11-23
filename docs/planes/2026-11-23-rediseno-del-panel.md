@@ -189,6 +189,17 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
   - contraída, al pasar el ratón por un icono sale su nombre;
   - «Excel 2026» con el mismo estilo que las secciones.
 
+## Fase A.3 · Barra contraída uniforme (23/11/2026)
+
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.2.**
+
+1. `npm install @glinglo/vela-ds@0.4.2`.
+2. El usuario: `<SidebarNavUser name="Jose" initials="J" />`, **sin `onClick`**, para que sea una fila no interactiva. Fuera el `avatar={<span>J</span>}`.
+
+**Comprueba:**
+- `npm test`, `npm run typecheck`, `next build` y `next start` con cada página dando 200.
+- En la vista previa, con la barra contraída: «Abrir el bot», el elemento activo y el hover son cuadrados del mismo tamaño. El usuario no se enfoca con Tab.
+
 ## Fase B · Inicio = resultados y avisos
 
 **Datos** (funciones nuevas puras en `lib/libro.ts`, con tests en `tests/`; sin tocar `calculo.ts`):
