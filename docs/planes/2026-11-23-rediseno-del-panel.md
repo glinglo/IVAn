@@ -142,14 +142,14 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
 
 ## Fase A.2 · Retoques tras la revisión visual (23/11/2026)
 
-En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.0** (plan `docs/planes/2026-11-23-vela-0-4-0.md` de `glinglo/vela-ds`): barra lateral con ancho propio y contraíble. Lo que vio Jose en la vista previa:
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.1** (planes `2026-11-23-vela-0-4-0.md` y `2026-11-23-vela-0-4-1.md` de `glinglo/vela-ds`): barra lateral con ancho propio y contraíble, y compatible con páginas de servidor. La 0.4.0 no sirve: rompe `next build`. Lo que vio Jose en la vista previa:
 
 1. **La barra inferior móvil no está fija:** se coloca como una columna más, a la derecha del contenido.
    - Envolver la `TabBar` en un contenedor `fixed inset-x-0 bottom-0 z-40 lg:hidden`.
    - Al `<main>`, padding inferior para que la barra no tape el final: `pb-[calc(96px+env(safe-area-inset-bottom))]` en móvil y `lg:pb-10` en escritorio.
    - Comprobar a 390 px que la barra queda abajo y se ve el final de la página.
-2. **Barra lateral con Vela 0.4.0:**
-   - `npm install @glinglo/vela-ds@0.4.0`;
+2. **Barra lateral con Vela 0.4.1:**
+   - `npm install @glinglo/vela-ds@0.4.1`;
    - el ancho lo pone Vela: quitar cualquier ancho propio;
    - `collapsible`, con el estado guardado en la cookie `ivan_barra=contraida|expandida` (un año, `path=/`, `SameSite=Lax`);
    - el layout (servidor) lee la cookie con `cookies()` y pasa `defaultCollapsed`, para que no haya salto al cargar;
