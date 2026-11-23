@@ -142,14 +142,21 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
 
 ## Fase A.2 · Retoques tras la revisión visual (23/11/2026)
 
-En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. Lo que vio Jose en la vista previa:
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.4.0** (plan `docs/planes/2026-11-23-vela-0-4-0.md` de `glinglo/vela-ds`): barra lateral con ancho propio y contraíble. Lo que vio Jose en la vista previa:
 
 1. **La barra inferior móvil no está fija:** se coloca como una columna más, a la derecha del contenido.
    - Envolver la `TabBar` en un contenedor `fixed inset-x-0 bottom-0 z-40 lg:hidden`.
    - Al `<main>`, padding inferior para que la barra no tape el final: `pb-[calc(96px+env(safe-area-inset-bottom))]` en móvil y `lg:pb-10` en escritorio.
    - Comprobar a 390 px que la barra queda abajo y se ve el final de la página.
-2. **La barra lateral es estrecha** (≈180 px). Ancho fijo de **240 px** (`w-60 shrink-0`), como en el lienzo.
-3. **Iconos como en el lienzo,** con `lucide-react` (el mismo set que usa Vela; añadirlo como dependencia con la misma versión mayor que Vela):
+2. **Barra lateral con Vela 0.4.0:**
+   - `npm install @glinglo/vela-ds@0.4.0`;
+   - el ancho lo pone Vela: quitar cualquier ancho propio;
+   - `collapsible`, con el estado guardado en la cookie `ivan_barra=contraida|expandida` (un año, `path=/`, `SameSite=Lax`);
+   - el layout (servidor) lee la cookie con `cookies()` y pasa `defaultCollapsed`, para que no haya salto al cargar;
+   - `onCollapsedChange` escribe la cookie;
+   - `logoCollapsed` = la «I» de IVAn.
+3. **«Abrir el bot»** pasa a ser un `SidebarNavItem` con `variant="primary"`, `href={BOT_URL}`, `target="_blank"` e icono `Send`. Así se contrae como los demás.
+4. **Iconos como en el lienzo,** con `lucide-react` (el mismo set que usa Vela; añadirlo como dependencia con la misma versión mayor que Vela):
 
    | Sección | Icono |
    |---|---|
@@ -160,15 +167,18 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. Lo que vio 
    | Bot | `Send` (avión de papel, Telegram; el de ahora parece un candado) |
 
    20 px en la barra inferior, 16 px en la lateral y 22 px en el botón central. Fuera los `path` dibujados a mano de `PanelNav.tsx`.
-4. **Pie de la barra lateral:**
+5. **Pie de la barra lateral:**
    - «Excel {año}» pasa a ser un `SidebarNavItem` con `href` e icono `Download` (hoy es un `<a>` sin estilo). Se adelanta desde la fase B.
-   - El usuario: una fila con la inicial en un círculo de 24 px `brand-100` / `brand-800` y «Jose» en `text-row`. No es un botón: aún no hay menú.
+   - El usuario pasa a `SidebarNavUser` con la inicial en un círculo `brand-100` / `brand-800`. Sin menú todavía: si `SidebarNavUser` solo existe como botón, usar una fila con el mismo aspecto que no sea interactiva y apuntarlo en las notas.
 
 **Comprueba:**
 - `npm test` y `npm run typecheck`.
 - En la vista previa:
   - a 390 px, la barra fija abajo con el avión de papel en el centro y el contenido completo por encima;
-  - a 1440 px, la barra lateral de 240 px con los iconos nuevos y «Excel 2026» con el mismo estilo que las secciones.
+  - a 1440 px, la barra de 240 px con los iconos nuevos;
+  - el botón junto al logo la contrae a iconos, y al recargar la página sigue contraída;
+  - contraída, al pasar el ratón por un icono sale su nombre;
+  - «Excel 2026» con el mismo estilo que las secciones.
 
 ## Fase B · Inicio = resultados y avisos
 
