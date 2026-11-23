@@ -358,3 +358,20 @@ En escritorio, lo mismo en filas `flex-wrap`:
 - `npm run typecheck`: sin errores.
 - `npm run build` en local con `GITHUB_PACKAGES_TOKEN` cargado: compila bien.
 - Pendiente de Jose en el preview de Vercel a 1440 px: que la barra lateral llegue hasta abajo y quede fija al hacer scroll; que el clic central en «Ventas» la abra en otra pestaña; que «Abrir el bot» abra Telegram en otra pestaña; que Impuestos no muestre badge hoy (23/11, el 4T abre el 1 de enero).
+
+### Fase A.2 (23/11/2026, Claude Code, rama `plan/rediseno-a`)
+
+- Instalado `@glinglo/vela-ds@0.4.1` y `lucide-react@^1.14.0` (se resolvió a `1.78.0`, la misma dependencia que usa Vela internamente).
+- **Barra inferior móvil:** `TabBar` envuelta en `<div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">` en `NavMovil` (`components/PanelNav.tsx`); antes el `className` iba directo en `TabBar`. El `<main>` del layout del panel (`app/(panel)/layout.tsx`) lleva ahora `pb-[calc(96px+env(safe-area-inset-bottom))] lg:pb-10`.
+- **Barra lateral contraíble:** `SidebarNav` con `collapsible`, `logoCollapsed` (la «I» de IVAn) y `defaultCollapsed`. El estado se lee en `app/(panel)/layout.tsx` (servidor) con `cookies()` (`ivan_barra=contraida|expandida`) y se pasa como prop `barraContraida` a `NavEscritorio`; `onCollapsedChange` escribe la cookie con `document.cookie` (un año, `path=/`, `SameSite=Lax`) desde el cliente.
+- **«Abrir el bot»** ahora es un `SidebarNavItem` más (`variant="primary"`, `icon={<Send size={16} />}`, `href`, `target="_blank"`), dentro de la lista de items, en vez del `Button` suelto de arriba: así se contrae con el resto.
+- **Iconos de `lucide-react`:** `House`, `TrendingUp`, `Receipt`, `Landmark` para las 4 secciones y `Send` para el bot (sustituye al candado dibujado a mano). `Download` para «Excel {año}». Tamaños: 20 px en `TabBar` (móvil), 16 px en `SidebarNavItem` (lateral) y 22 px en el `centerAction` del bot (móvil). Borrado el objeto `icono` con los `path` a mano y el componente `Svg` de `PanelNav.tsx`.
+- **Pie de la barra lateral:** «Excel {año}» pasa de `<a>` suelto a `SidebarNavItem` con `icon={<Download size={16} />}` y `href`. El usuario usa `SidebarNavUser` (existe en Vela 0.4.1 como botón con `name` y `avatar`); no tiene menú ni `onClick` todavía — se deja como botón sin acción, tal como permite el plan si no hiciera falta interacción.
+- Nada de esto tocó páginas de servidor: `PanelNav.tsx` sigue siendo `"use client"` y todas las funciones (`onCollapsedChange`, iconos como JSX) se quedan dentro de ese componente; `app/(panel)/layout.tsx` solo pasa datos (`barraContraida: boolean`) a Vela a través de `NavEscritorio`.
+
+**Comprobaciones:**
+- `npm test`: 83 tests, 11 ficheros, todos en verde.
+- `npm run typecheck`: sin errores (con `.next` borrado antes).
+- `npm run build`: compila bien con Turbopack y Next 16.4.6.
+- `npm run start` + `curl` con una cookie de sesión válida generada con `crearToken("sesion")` de `lib/sesion.ts` (sin tocar datos reales): `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4` e `/impuestos/2026/390` dan todas `200`.
+- Pendiente de Jose en el preview de Vercel: a 390 px, que la barra fija abajo deje ver el final del contenido con el avión de papel en el centro; a 1440 px, los iconos nuevos y que el botón junto al logo contraiga/expanda la barra y lo recuerde al recargar; contraída, que el tooltip con el nombre salga al pasar el ratón; que «Excel 2026» tenga el mismo aspecto que las secciones.
