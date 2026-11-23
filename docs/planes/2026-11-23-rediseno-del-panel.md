@@ -233,6 +233,36 @@ En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende d
   - «Cerrar sesión» lleva a «Has cerrado sesión», y volver atrás no deja ver el panel;
   - «Configuración» muestra los datos con el IBAN enmascarado.
 
+## Fase A.4 · Botón del bot, tooltips y menú visible con la barra contraída (23/11/2026)
+
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.5.0** (capa flotante, `Tooltip`, `SidebarNav` con `action`).
+
+Lo que vio Jose en la vista previa de la A.3:
+- con la barra contraída, el menú del usuario no se ve, porque se abre por debajo y la barra lo recorta;
+- faltan tooltips laterales;
+- «Abrir el bot» va pegado a las secciones y parece un elemento más del menú.
+
+1. **`npm install @glinglo/vela-ds@0.5.0`.**
+2. **`components/PanelNav.tsx` (`NavEscritorio`):**
+   - Quitar el `<SidebarNavItem variant="primary" …>Abrir el bot</SidebarNavItem>` de la lista.
+   - Pasarlo como `action={{ label: "Abrir el bot", icon: <Send size={16} />, href: BOT_URL, target: "_blank" }}` en `SidebarNav`. Vela lo pinta como `Button` `primary`, separado de las secciones por un separador.
+   - Las secciones, el «Excel {año}» y el usuario no cambian: los tooltips y el menú flotante los pone Vela.
+   - Se puede quitar el `overflow-y-auto` de la barra si ya no hace falta. Si se deja, el menú y los tooltips tienen que verse igual, porque van en un portal.
+3. **Móvil:** sin cambios. La `TabBar` ya tiene el bot como acción central.
+
+**Comprueba:**
+- `npm test`, `npm run typecheck`, `next build` y `next start` con cada página dando 200.
+- En el HTML de `/` (servidor): «Abrir el bot» aparece una sola vez en la barra, como enlace con `target="_blank"`, y no hay ningún `role="tooltip"` ni `role="menu"`.
+- En la vista previa, **con la barra contraída:**
+  - el menú del usuario se ve entero a la derecha, con su borde de abajo alineado con la «J»;
+  - al pasar el ratón por cada sección, por el botón del bot, por «Excel» y por la «J», sale un tooltip a la derecha con su nombre, sin el recuadro gris del navegador;
+  - con Tab también salen;
+  - el botón del bot es un cuadrado lila de 40 px, separado de las secciones por una línea.
+- **Con la barra expandida:**
+  - «Abrir el bot» es un botón lila a todo el ancho, separado de las secciones;
+  - no hay tooltips;
+  - el menú del usuario se abre hacia arriba.
+
 ## Fase B · Inicio = resultados y avisos
 
 **Datos** (funciones nuevas puras en `lib/libro.ts`, con tests en `tests/`; sin tocar `calculo.ts`):
