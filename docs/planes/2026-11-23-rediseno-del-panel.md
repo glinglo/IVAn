@@ -108,6 +108,38 @@ Si una pantalla del lienzo y este plan no coinciden, manda el plan. Apúntalo en
 - `next build` en local con `GITHUB_PACKAGES_TOKEN` cargado.
 - En Vercel (preview): las 4 pestañas, el bot central, la barra lateral a 1440 px, las redirecciones antiguas y un enlace `/panel` del bot que lleve a `/impuestos/2026/4`.
 
+## Fase A.1 · Retoques tras la revisión de la fase A (23/11/2026)
+
+En la misma rama `plan/rediseno-a`, **antes de fusionar el PR #10**. **Depende de Vela 0.3.1** (plan `docs/planes/2026-11-23-vela-0-3-1.md` de `glinglo/vela-ds`): `SidebarNavItem` y `Button` con `href`, y `badge`.
+
+1. **Barra lateral con enlaces de verdad:**
+   - `npm install @glinglo/vela-ds@0.3.1`;
+   - en `components/PanelNav.tsx`, cada `SidebarNavItem` lleva `href` (con el `?anio=` que ya se calcula) en vez de `onClick={() => window.location.href = …}`;
+   - fuera `window.location` del archivo.
+2. **«Abrir el bot» en otra pestaña:**
+   - escritorio: `Button` con `href={BOT_URL}` y `target="_blank"`;
+   - móvil: `centerAction` de `TabBar` con `target="_blank"`.
+3. **Aviso de Impuestos sin depender del texto:**
+   - `Paso` gana `clave: "plazo" | "gastos" | "facturar" | "iban" | "direccion" | "mac" | "cuota" | "verifactu"`, que se rellena en `siguientesPasos` sin cambiar su lógica ni su orden (adelantado desde la fase B);
+   - el aviso de Impuestos pasa a ser `pasos.some((p) => p.clave === "plazo" && p.nivel !== "info")`;
+   - en la barra lateral, `badge={<Badge type="onhold">{t}T</Badge>}` con el trimestre del plazo, en vez del «•»;
+   - test de `siguientesPasos` que compruebe la `clave` de cada paso.
+4. **La barra lateral ocupa todo el alto:** el `SidebarNav` va en un contenedor `sticky top-0 h-dvh` (con `overflow-y-auto`). Ahora se corta después de «Impuestos».
+5. **El pie de la barra lateral que pedía la fase A:**
+   - «Excel {año}» (`/api/exportar?anio=`), como enlace;
+   - el usuario: «Jose», con la inicial en un círculo `brand-100`.
+
+   Van en la prop `footer` de `SidebarNav`.
+6. **`themeColor`** en `app/layout.tsx`: el color de fondo nuevo (`#F8FAFC`, `gray-50` de Vela), en vez de `#f6f5f2`.
+
+**Comprueba:**
+- `npm test` y `npm run typecheck`.
+- En la vista previa de Vercel, a 1440 px:
+  - la barra lateral llega hasta abajo y se queda fija al hacer scroll;
+  - clic central en «Ventas» la abre en otra pestaña;
+  - «Abrir el bot» abre Telegram en otra pestaña;
+  - Impuestos muestra el badge solo si hay plazo abierto (hoy, 23/11, no lo hay: el 4T abre el 1 de enero).
+
 ## Fase B · Inicio = resultados y avisos
 
 **Datos** (funciones nuevas puras en `lib/libro.ts`, con tests en `tests/`; sin tocar `calculo.ts`):
@@ -124,7 +156,7 @@ Si una pantalla del lienzo y este plan no coinciden, manda el plan. Apúntalo en
   - `destacado` es el primer paso `urgente`, o, si `hoy` es día ≥ 28, el de facturar el mes;
   - todo lo demás va a `resto`.
 
-  Para distinguir el paso de facturar, `Paso` gana un campo `clave: "plazo" | "gastos" | "facturar" | "iban" | "direccion" | "mac" | "cuota" | "verifactu"`, que se rellena en `siguientesPasos` sin cambiar su lógica ni su orden.
+  Para distinguir el paso de facturar se usa `Paso.clave`, que ya existe desde la fase A.1.
 - **Texto del paso de facturar en modo paralelo:** si `modoParalelo(ajustes, hoy)` (`lib/externas.ts`), el texto es «Registrar la factura de {mes} de {cliente}», con el detalle «La emite Selfconta: mándale el PDF al bot».
 
 **Pantalla `/`** (móvil, de arriba abajo):
