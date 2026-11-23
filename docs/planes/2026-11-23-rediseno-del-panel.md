@@ -249,9 +249,20 @@ Lo que vio Jose en la vista previa de la A.3:
    - Las secciones, el «Excel {año}» y el usuario no cambian: los tooltips y el menú flotante los pone Vela.
    - Se puede quitar el `overflow-y-auto` de la barra si ya no hace falta. Si se deja, el menú y los tooltips tienen que verse igual, porque van en un portal.
 3. **Móvil:** sin cambios. La `TabBar` ya tiene el bot como acción central.
+4. **El CSS antiguo no debe pisar a Vela.** Jose vio en DevTools el `text-secondary` de los elementos de la barra tachado.
+   - **La causa:** en Tailwind 4 las utilidades van en `@layer utilities`, y cualquier regla fuera de una capa les gana, sea cual sea su especificidad. `app/globals.css` tiene `a { color: inherit; text-decoration: none; }` fuera de capa, así que los enlaces de Vela heredan el color en vez de usar sus clases.
+   - **El arreglo, en `app/globals.css`:**
+     - Borrar la línea `a { color: inherit; text-decoration: none; }`. El reset de Tailwind ya lo hace, y dentro de su capa.
+     - Meter todo el CSS antiguo que va después de los `@theme` (`*`, `body`, `h1`, `h2`, `code`, `.card`, `.paso`, `.chips`, `.nav`…) dentro de `@layer base { … }`. Los `@import`, `@source` y `@theme` se quedan fuera.
+   - **Las páginas antiguas tienen que verse igual:** dentro de la misma capa, lo que va después sigue ganando al reset de Tailwind.
 
 **Comprueba:**
 - `npm test`, `npm run typecheck`, `next build` y `next start` con cada página dando 200.
+- En `app/globals.css` no queda ninguna regla de estilo fuera de `@layer`, salvo los `@theme`/`@import`/`@source`.
+- En la vista previa, con DevTools:
+  - ninguna clase de Vela sale tachada en la barra, la cabecera, el menú ni Configuración;
+  - el texto de las secciones no activas usa `--color-text-secondary`;
+  - las páginas que aún no se han rediseñado (trimestre, 390) se ven como antes.
 - En el HTML de `/` (servidor): «Abrir el bot» aparece una sola vez en la barra, como enlace con `target="_blank"`, y no hay ningún `role="tooltip"` ni `role="menu"`.
 - En la vista previa, **con la barra contraída:**
   - el menú del usuario se ve entero a la derecha, con su borde de abajo alineado con la «J»;
