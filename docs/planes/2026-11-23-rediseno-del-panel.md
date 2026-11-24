@@ -403,6 +403,19 @@ Reescribir `app/(panel)/page.tsx`. Sigue siendo de servidor y solo pasa datos.
   - al cambiar de periodo, cambian la cifra, la cascada y el subtítulo;
   - en escritorio, las tres filas.
 
+### Notas de ejecución (Claude Code, 24/11/2026)
+
+- `lib/inicio.ts` y `tests/inicio.test.ts` hechos tal cual el plan: `seriesMensuales`, `cascada`, `salud`, `estadoYCuota` y `clasificarAvisos`, con `pyg` y `meses` de `lib/calculo.ts` sin tocarlo. `npm test` pasa (12 ficheros, 96 tests con los nuevos).
+- `estadoYCuota`: "por trimestre cerrado" se interpretó como los trimestres cuyo `rangoTrimestre(...).hasta <= hasta`; el trimestre en curso no entra en la suma. No se pinta en esta fase (queda para la pantalla «Impuestos y cuota» de la fase E), como dice el plan.
+- Texto de `facturar` en modo paralelo: añadido en `lib/libro.ts` con `modoParalelo` de `lib/externas.ts` y `nombreMes` de `lib/fiscal.ts`, con su test en `tests/libro.test.ts`.
+- **Desviación del plan, apuntada como pide la regla de trabajo:** `SegmentedControlOption` de Vela 0.5.0 no tiene campo para deshabilitar una opción (solo `label`/`value`), así que «los trimestres futuros del año actual salen desactivados en el control» se implementó quitándolos de la lista en vez de mostrarlos deshabilitados. `components/Periodo.tsx` filtra `disponibles` del lado del servidor (calculado en la página con el trimestre de hoy). Si Jose prefiere verlos deshabilitados en gris, hace falta en Vela una prop `disabled` por opción (fuera del alcance de esta fase).
+- Badges de `AvisosInicio` (franja → Sheet «Por hacer»): como el plan no fija qué `BadgeType` usar para «Urgente»/«Pendiente», se eligió `destructive` para urgente y `onhold` (el mismo que ya usa el badge de trimestre en la barra lateral) para pendiente.
+- `NoticeCard` `action`: cuando el paso no tiene `href` propio, se usa el bot (`https://t.me/Ivanelgestorbot`) con la etiqueta «Abrir el bot»; con `href` propio la etiqueta es «Ver» (el tipo `action` de `NoticeCard` en 0.5.0 no admite `target`, así que no se puede abrir en otra pestaña — solo aplica al enlace del bot, que de todas formas es interno al panel salvo cuando no hay `href`).
+- `app/(panel)/layout.tsx`, `components/PanelNav.tsx`, `components/AccionesCabecera.tsx`, las páginas de Ventas/Gastos/Impuestos/Configuración y `lib/calculo.ts` no se han tocado, tal como pide esta fase.
+- Comprobado: `npm test`, `npm run typecheck`, `next build` y `next start` (puerto 3177, el 3100/3101 estaban ocupados en esta máquina) con `curl` y cookie de sesión real: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4`, `/impuestos/2026/390` y `/ajustes` dan todas `200`.
+- **Cifra real a hoy (24/11/2026):** rendimiento neto de `/` = **20.572,12 €**, igual que el que da `pyg(libro.datos, hoy)` (no escrito a mano). Está en el entorno de los ~20.600 € que estimaba el plan.
+- Sin vista previa de Vercel disponible en esta sesión (sin acceso al navegador): la comprobación visual de la franja/tarjeta, el drawer «Por hacer», la cascada y las barras con los tokens de marca queda pendiente de que Jose la revise en el despliegue de la rama.
+
 ## Fase B.1 · Estructura con Vela 0.6.0 (24/11/2026)
 
 **Empieza solo cuando se cumplan las dos cosas:**

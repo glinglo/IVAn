@@ -70,6 +70,34 @@ describe("siguientesPasos: clave de cada paso", () => {
     const paso = pasos.find((p) => p.clave === "facturar");
     expect(paso).toBeDefined();
     expect(paso?.nivel).toBe("pendiente");
+    expect(paso?.texto).toBe("Facturar este mes a Acme");
+  });
+
+  it("28/11 en modo paralelo: el paso de facturar dice que lo emite Selfconta", () => {
+    const l = libro({
+      ajustes: { ...libro().ajustes, emitir_desde: "2027-01-01" },
+      facturas: [
+        {
+          id: "1",
+          numero: "1",
+          fecha: "2026-10-05",
+          cliente: "Acme",
+          nif_cliente: null,
+          concepto: "Servicios",
+          base: 1000,
+          iva_pct: 21,
+          iva: 210,
+          retencion: 0,
+          total: 1210,
+          tipo: "nacional",
+          pdf_path: null,
+        },
+      ],
+    });
+    const pasos = siguientesPasos(ctx({ hoy: "2026-11-28", libro: l }));
+    const paso = pasos.find((p) => p.clave === "facturar");
+    expect(paso?.texto).toBe("Registrar la factura de noviembre de Acme");
+    expect(paso?.detalle).toBe("La emite Selfconta: mándale el PDF al bot");
   });
 
   it("29/01: plazo del 4T del año anterior abierto, clave 'plazo'", () => {
