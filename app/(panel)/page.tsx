@@ -22,7 +22,16 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
   const anioCerrado = anio !== anioActual;
   const tHoy = trimestreDe(hoy).t;
   const trimestreEnCurso = periodo !== null && !anioCerrado && periodo === tHoy;
-  const hasta = periodo === null ? (anioCerrado ? `${anio}-12-31` : hoy) : trimestreEnCurso ? hoy : rangoTrimestre(anio, periodo).hasta;
+  const hasta =
+    periodo === null
+      ? anioCerrado
+        ? `${anio}-12-31`
+        : hoy
+      : trimestreEnCurso
+        ? hoy
+        : anio === anioActual
+          ? (rangoTrimestre(anio, periodo).hasta < hoy ? rangoTrimestre(anio, periodo).hasta : hoy)
+          : rangoTrimestre(anio, periodo).hasta;
 
   const p = pygHasta(libro, hasta);
   const pasos = siguientesPasos(ctx);
@@ -62,7 +71,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
         <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
 
         <div className="flex flex-wrap gap-4">
-          <Card className="lg:basis-1/3 grow">
+          <Card className="basis-full lg:basis-1/3 grow">
             <h2 className="text-eyebrow text-tertiary">Rendimiento neto</h2>
             <div className="text-display">{euros(p.rendimientoNeto).replace(/,\d\d €/, " €")}</div>
             {margen.valor !== null && (
@@ -71,20 +80,20 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
             <div className="text-tertiary">≈ {euros(porMes).replace(/,\d\d €/, " €")} al mes</div>
           </Card>
 
-          <Card className="lg:basis-[calc(2/3*100%-1rem)] grow">
+          <Card className="basis-full lg:basis-[calc(2/3*100%-1rem)] grow">
             <h2 className="text-eyebrow text-tertiary">De lo facturado al rendimiento</h2>
             <Cascada filas={filasCascada} />
           </Card>
         </div>
 
         <div className="flex flex-wrap gap-4">
-          <Card className="lg:basis-[calc(2/3*100%-1rem)] grow">
+          <Card className="basis-full lg:basis-[calc(2/3*100%-1rem)] grow">
             <h2 className="text-eyebrow text-tertiary">Ingresos y gastos por mes</h2>
             <Barras serie={serie} />
             <p className="text-tertiary">El 5 % y la amortización se calculan sobre el año</p>
           </Card>
 
-          <Card className="lg:basis-1/3 grow">
+          <Card className="basis-full lg:basis-1/3 grow">
             <h2 className="text-eyebrow text-tertiary">Más detalle</h2>
             <ListGroup>
               <ListItem title="Impuestos" href={`/impuestos?anio=${anio}`} chevron />

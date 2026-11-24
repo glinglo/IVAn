@@ -138,3 +138,17 @@ export function clasificarAvisos(pasos: Paso[], hoy: string): Avisos {
   const resto = destacado ? pasos.filter((p) => p !== destacado) : pasos;
   return { destacado, resto };
 }
+
+export interface AvisosVisibles {
+  tarjeta: Paso | null;
+  franja: Paso[];
+}
+
+/** Qué se pinta en Inicio: la tarjeta (si hay destacado y no está oculto) y la franja (el resto,
+ * más el destacado al principio si el usuario lo ha ocultado). Ocultar la tarjeta no borra la tarea. */
+export function avisosVisibles({ destacado, resto, oculto }: { destacado: Paso | null; resto: Paso[]; oculto: boolean }): AvisosVisibles {
+  if (destacado && !oculto) {
+    return { tarjeta: destacado, franja: resto };
+  }
+  return { tarjeta: null, franja: destacado ? [destacado, ...resto] : resto };
+}

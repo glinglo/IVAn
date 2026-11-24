@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { cascada, clasificarAvisos, estadoYCuota, salud, seriesMensuales } from "../lib/inicio";
+import { avisosVisibles, cascada, clasificarAvisos, estadoYCuota, salud, seriesMensuales } from "../lib/inicio";
 import { pyg, type DatosCalc } from "../lib/calculo";
 import type { Ajustes } from "../lib/db";
 import type { Libro, Paso } from "../lib/libro";
@@ -147,6 +147,43 @@ describe("clasificarAvisos", () => {
     const { destacado, resto } = clasificarAvisos(pasos, "2026-01-29");
     expect(destacado?.clave).toBe("plazo");
     expect(resto).toHaveLength(1);
+  });
+});
+
+describe("avisosVisibles", () => {
+  const paso = (over: Partial<Paso>): Paso => ({ nivel: "info", clave: "mac", texto: "x", ...over });
+
+  it("destacado visible con resto: tarjeta y franja con el resto", () => {
+    const destacado = paso({ clave: "facturar", nivel: "urgente" });
+    const resto = [paso({ clave: "iban", nivel: "pendiente" })];
+    const r = avisosVisibles({ destacado, resto, oculto: false });
+    expect(r.tarjeta).toBe(destacado);
+    expect(r.franja).toEqual(resto);
+  });
+
+  it("destacado oculto: sin tarjeta y franja con el destacado primero", () => {
+    const destacado = paso({ clave: "facturar", nivel: "urgente" });
+    const resto = [paso({ clave: "iban", nivel: "pendiente" })];
+    const r = avisosVisibles({ destacado, resto, oculto: true });
+    expect(r.tarjeta).toBeNull();
+    expect(r.franja).toEqual([destacado, ...resto]);
+  });
+
+  it("sin nada: todo al día", () => {
+    const r = avisosVisibles({ destacado: null, resto: [], oculto: false });
+    expect(r.tarjeta).toBeNull();
+    expect(r.franja).toHaveLength(0);
+  });
+});
+
+describe("clasificarAvisos + avisosVisibles, 28/11", () => {
+  it("tarjeta y franja a la vez", () => {
+    const pasoFn = (over: Partial<Paso>): Paso => ({ nivel: "info", clave: "mac", texto: "x", ...over });
+    const pasos = [pasoFn({ clave: "iban", nivel: "pendiente", texto: "IBAN" }), pasoFn({ clave: "facturar", nivel: "info", texto: "Facturar" })];
+    const { destacado, resto } = clasificarAvisos(pasos, "2026-11-28");
+    const r = avisosVisibles({ destacado, resto, oculto: false });
+    expect(r.tarjeta?.clave).toBe("facturar");
+    expect(r.franja).toHaveLength(1);
   });
 });
 

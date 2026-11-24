@@ -20,33 +20,34 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
   const [oculto, setOculto] = useState(ocultoHoy);
   const [abierto, setAbierto] = useState(false);
 
-  if (destacado && !oculto) {
-    const variante = destacado.nivel === "urgente" ? "urgent" : destacado.clave === "facturar" || destacado.clave === "gastos" ? "pending" : "brand";
-    return (
-      <NoticeCard
-        variant={variante}
-        title={destacado.texto}
-        description={destacado.detalle}
-        action={{ label: destacado.href ? "Ver" : "Abrir el bot", href: destacado.href ?? BOT_URL }}
-        onDismiss={() => {
-          escribirCookieOculta(destacado.clave, hoy);
-          setOculto(true);
-        }}
-      />
-    );
-  }
+  const tarjeta = destacado && !oculto ? destacado : null;
+  const franja = tarjeta ? resto : destacado ? [destacado, ...resto] : resto;
 
-  if (resto.length > 0) {
-    return (
-      <>
-        <NoticeStrip
-          count={resto.length}
-          title={resto.length === 1 ? "1 cosa por hacer" : `${resto.length} cosas por hacer`}
-          subtitle={`La próxima: ${resto[0].texto}`}
-          onClick={() => setAbierto(true)}
+  return (
+    <>
+      {tarjeta && (
+        <NoticeCard
+          variant={tarjeta.nivel === "urgente" ? "urgent" : tarjeta.clave === "facturar" || tarjeta.clave === "gastos" ? "pending" : "brand"}
+          title={tarjeta.texto}
+          description={tarjeta.detalle}
+          action={{ label: tarjeta.href ? "Ver" : "Abrir el bot", href: tarjeta.href ?? BOT_URL }}
+          onDismiss={() => {
+            escribirCookieOculta(tarjeta.clave, hoy);
+            setOculto(true);
+          }}
         />
-        <Sheet open={abierto} title="Por hacer" onClose={() => setAbierto(false)}>
-          {resto.map((p, i) => {
+      )}
+
+      {franja.length > 0 ? (
+        <>
+          <NoticeStrip
+            count={franja.length}
+            title={franja.length === 1 ? "1 cosa por hacer" : `${franja.length} cosas por hacer`}
+            subtitle={`La próxima: ${franja[0].texto}`}
+            onClick={() => setAbierto(true)}
+          />
+          <Sheet open={abierto} title="Por hacer" onClose={() => setAbierto(false)}>
+          {franja.map((p, i) => {
             const badge = BADGE[p.nivel];
             return (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "12px 0" }}>
@@ -63,10 +64,11 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
               </div>
             );
           })}
-        </Sheet>
-      </>
-    );
-  }
-
-  return <p className="text-tertiary">Todo al día</p>;
+          </Sheet>
+        </>
+      ) : (
+        !tarjeta && <p className="text-tertiary">Todo al día</p>
+      )}
+    </>
+  );
 }

@@ -416,6 +416,15 @@ Reescribir `app/(panel)/page.tsx`. Sigue siendo de servidor y solo pasa datos.
 - **Cifra real a hoy (24/11/2026):** rendimiento neto de `/` = **20.572,12 €**, igual que el que da `pyg(libro.datos, hoy)` (no escrito a mano). Está en el entorno de los ~20.600 € que estimaba el plan.
 - Sin vista previa de Vercel disponible en esta sesión (sin acceso al navegador): la comprobación visual de la franja/tarjeta, el drawer «Por hacer», la cascada y las barras con los tokens de marca queda pendiente de que Jose la revise en el despliegue de la rama.
 
+### Correcciones de la revisión (Claude Code, 24/11/2026)
+
+- **Tarjeta y franja a la vez:** `avisosVisibles({ destacado, resto, oculto })` nueva en `lib/inicio.ts` (con tests en `tests/inicio.test.ts`, incluido el caso del 28/11 con tarjeta y franja juntas). `components/AvisosInicio.tsx` ya no sale de la función al pintar la tarjeta: calcula `tarjeta`/`franja` con la misma regla (destacado visible → franja = resto; destacado oculto → franja = [destacado, ...resto]) y pinta ambas piezas en el mismo fragmento. «Todo al día» solo cuando no hay tarjeta y la franja está vacía.
+- **Ancho de escritorio:** añadido `lg:max-w-5xl` a la clase del `<main>` en `app/(panel)/layout.tsx`, como único cambio de esta fase en el layout.
+- **Tarjetas siempre en columna en móvil:** las 4 `Card` de `app/(panel)/page.tsx` llevan `basis-full` además de su `lg:basis-…`.
+- **`?periodo=` futuro:** en `app/(panel)/page.tsx`, cuando `anio === anioActual` y el trimestre pedido no está en curso, `hasta` se limita a `min(rangoTrimestre(anio, periodo).hasta, hoy)` (comparación de cadenas ISO).
+- Comprobado: `npm test` (100 tests, con los 3 casos nuevos de `avisosVisibles` y el del 28/11), `npm run typecheck`, `next build` y `next start` (puerto 3100) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/?periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4`, `/impuestos/2026/390` y `/ajustes` dan todas `200`.
+- Sin vista previa de Vercel en esta sesión: la comprobación visual (filas de escritorio a 1440 px, columna única a 390 px) queda pendiente de que Jose la revise en el despliegue de la rama.
+
 ### Correcciones de la revisión (Claude, 24/11/2026)
 
 Se hacen en la misma rama `plan/rediseno-b`, **antes de fusionar el PR #11**. Siguen con Vela 0.5.0.

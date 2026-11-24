@@ -19,7 +19,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
       <Suspense fallback={null}>
         <NavEscritorio trimestreAviso={trimestreAviso} barraContraida={barraContraida} />
       </Suspense>
-      <main className="app lg:pb-10 pb-[calc(96px+env(safe-area-inset-bottom))]" style={{ flex: 1 }}>
+      <main className="app lg:max-w-5xl lg:pb-10 pb-[calc(96px+env(safe-area-inset-bottom))]" style={{ flex: 1 }}>
         {children}
       </main>
       <Suspense fallback={null}>
