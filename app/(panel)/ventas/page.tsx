@@ -7,6 +7,7 @@ import { Periodo } from "@/components/Periodo";
 import { BloqueResultados } from "@/components/BloqueResultados";
 import { GraficoMes } from "@/components/GraficoMes";
 import { AvatarProveedor } from "@/components/AvatarProveedor";
+import { VisorArchivo } from "@/components/VisorArchivo";
 
 const BOT_URL = "https://t.me/Ivanelgestorbot";
 const FACTURAS_RECIENTES = 6;
@@ -16,8 +17,8 @@ const TIPO_BADGE: Record<FacturaLista["tipo"], string> = {
   ue: "UE · sin IVA",
   fuera_ue: "Fuera UE",
 };
-
-const ETIQUETAS_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const detalleTipoFactura = (f: Pick<FacturaLista, "tipo" | "iva_pct" | "retencion_pct">) =>
+  f.tipo === "nacional" ? `${pct(f.iva_pct)} · −${pct(f.retencion_pct)}` : TIPO_BADGE[f.tipo];
 
 const capitaliza = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -64,11 +65,11 @@ export default async function Ventas({
   const mesesTranscurridos = mesesIso.filter((mes) => mesesConFactura.has(mes) || mes !== mesActualIso).length;
   const porMes = Math.round(base / Math.max(mesesTranscurridos, 1));
 
-  const mesesGrafico = mesesIso.map((mes, i) => {
+  const mesesGrafico = mesesIso.map((mes) => {
     const esActual = mes === mesActualIso && anio === anioActual;
     let valor = libro.facturas.filter((f) => f.fecha.startsWith(mes)).reduce((s, f) => s + f.base, 0);
     if (esActual && proxima) valor += proxima.importeEstimado;
-    return { label: ETIQUETAS_MES[mesIni + i - 1], valor, pendiente: esActual };
+    return { mes, valor: esActual && !valor ? null : valor, pendiente: esActual };
   });
 
   // Comparativa anual: solo tiene sentido con "Año" (siempre el año en curso).
@@ -110,13 +111,15 @@ export default async function Ventas({
 
               <div className="h-px bg-separator" />
 
-              <div className="flex flex-col gap-2">
-                <div className="text-display">{euros(base)}</div>
-                <div className="text-caption text-tertiary">
-                  {facturas.length === 1 ? "1 factura" : `${facturas.length} facturas`} · ≈ {eurosSinCentimos(porMes)} al mes de media
+              <div className="flex items-end justify-between gap-4 flex-wrap">
+                <div className="flex flex-col gap-2">
+                  <div className="text-display">{euros(base)}</div>
+                  <div className="text-caption text-tertiary">
+                    {facturas.length === 1 ? "1 factura" : `${facturas.length} facturas`} · ≈ {eurosSinCentimos(porMes)} al mes de media
+                  </div>
                 </div>
                 {periodo === null && comparativa && comparativa.pctFrenteAnterior !== null && (
-                  <Badge type={comparativa.pctFrenteAnterior >= 0 ? "success" : "onhold"} className="self-start">
+                  <Badge type={comparativa.pctFrenteAnterior >= 0 ? "success" : "onhold"}>
                     {pct(Math.abs(comparativa.pctFrenteAnterior))} {comparativa.pctFrenteAnterior >= 0 ? "más" : "menos"} que en {anio - 1} de enero a{" "}
                     {nombreMes(rangoTrimestre(anio, comparativa.tCerrado).hasta)}
                   </Badge>
@@ -152,18 +155,18 @@ export default async function Ventas({
                       <tr key={f.id} className="border-t border-separator">
                         <td className="py-2">
                           {f.pdf_path ? (
-                            <a href={`/api/archivo?path=${encodeURIComponent(f.pdf_path)}`} className="text-link-secondary">
-                              {f.numero}
-                            </a>
+                            <VisorArchivo path={f.pdf_path} titulo={`${f.numero} · ${f.cliente}`} fecha={fechaES(f.fecha)} importe={euros(f.total)}>
+                              <button type="button" className="text-link-secondary">
+                                {f.numero}
+                              </button>
+                            </VisorArchivo>
                           ) : (
                             f.numero
                           )}
                         </td>
                         <td className="py-2">{fechaES(f.fecha)}</td>
                         <td className="py-2">{f.cliente}</td>
-                        <td className="py-2">
-                          <Badge type="secondary">{TIPO_BADGE[f.tipo]}</Badge>
-                        </td>
+                        <td className="py-2">{detalleTipoFactura(f)}</td>
                         <td className="py-2 text-right">{euros(f.base)}</td>
                         <td className="py-2 text-right">{euros(f.total)}</td>
                       </tr>
@@ -173,12 +176,9 @@ export default async function Ventas({
               </div>
 
               <ul className="lg:hidden flex flex-col gap-3">
-                {facturasMostradas.map((f) => (
-                  <li key={f.id}>
-                    <a
-                      href={f.pdf_path ? `/api/archivo?path=${encodeURIComponent(f.pdf_path)}` : undefined}
-                      className="flex items-center justify-between gap-3"
-                    >
+                {facturasMostradas.map((f) => {
+                  const fila = (
+                    <div role={f.pdf_path ? "button" : undefined} tabIndex={f.pdf_path ? 0 : undefined} className="flex items-center justify-between gap-3">
                       <div className="flex flex-col">
                         <span>
                           {f.numero} · {f.cliente}
@@ -188,9 +188,20 @@ export default async function Ventas({
                         </span>
                       </div>
                       <span>{euros(f.total)}</span>
-                    </a>
-                  </li>
-                ))}
+                    </div>
+                  );
+                  return (
+                    <li key={f.id}>
+                      {f.pdf_path ? (
+                        <VisorArchivo path={f.pdf_path} titulo={`${f.numero} · ${f.cliente}`} fecha={fechaES(f.fecha)} importe={euros(f.total)}>
+                          {fila}
+                        </VisorArchivo>
+                      ) : (
+                        fila
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
 
               {hayMas && (
@@ -252,21 +263,18 @@ export default async function Ventas({
                 }))}
               />
               <ul className="flex flex-col gap-3">
-                {clientes.map(([nombre, c]) => {
-                  const detalleTipo = c.f.tipo === "nacional" ? `${pct(c.f.iva_pct)} · −${pct(c.f.retencion_pct)}` : TIPO_BADGE[c.f.tipo];
-                  return (
-                    <li key={nombre} className="flex items-center gap-3">
-                      <AvatarProveedor nombre={nombre} size="sm" />
-                      <div className="flex flex-col flex-1">
-                        <span>{nombre}</span>
-                        <span className="text-caption text-tertiary">
-                          {c.f.pais_cliente} · {detalleTipo} · {pct((c.base / (base || 1)) * 100)}
-                        </span>
-                      </div>
-                      <span>{euros(c.base)}</span>
-                    </li>
-                  );
-                })}
+                {clientes.map(([nombre, c]) => (
+                  <li key={nombre} className="flex items-center gap-3">
+                    <AvatarProveedor nombre={nombre} size="sm" />
+                    <div className="flex flex-col flex-1">
+                      <span>{nombre}</span>
+                      <span className="text-caption text-tertiary">
+                        {c.f.pais_cliente} · {detalleTipoFactura(c.f)} · {pct((c.base / (base || 1)) * 100)}
+                      </span>
+                    </div>
+                    <span>{euros(c.base)}</span>
+                  </li>
+                ))}
               </ul>
             </Card>
           )}

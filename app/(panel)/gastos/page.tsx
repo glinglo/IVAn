@@ -10,6 +10,7 @@ import { BloqueResultados } from "@/components/BloqueResultados";
 import { GraficoTipoIva } from "@/components/GraficoTipoIva";
 import { GraficoMes } from "@/components/GraficoMes";
 import { AvatarProveedor } from "@/components/AvatarProveedor";
+import { VisorArchivo } from "@/components/VisorArchivo";
 import { db } from "@/lib/db";
 
 const CORTO_IVA: Record<string, string> = {
@@ -18,8 +19,6 @@ const CORTO_IVA: Record<string, string> = {
   "ISP fuera UE": "ISP extra-UE",
   "Sin IVA deducible": "sin IVA",
 };
-
-const ETIQUETAS_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 export default async function Gastos({
   searchParams,
@@ -67,12 +66,11 @@ export default async function Gastos({
         : "Acumulado de enero a hoy"
       : `${periodo}T · de ${nombreMes(rangoTrimestre(anio, periodo).desde)} a ${trimestreEnCurso ? "hoy" : nombreMes(rangoTrimestre(anio, periodo).hasta)}`;
 
-  // % de lo que facturas en el mismo periodo.
-  const facturadoPeriodo = libro.facturas
+  // % sobre la base facturada en el mismo periodo (misma base que la cifra grande de Gastos).
+  const facturadoBasePeriodo = libro.facturas
     .filter((f) => !periodo || trimestreDe(f.fecha).t === periodo)
     .reduce((s, f) => s + f.base, 0);
-  const totalGastosPeriodo = gastosDelPeriodo.reduce((s, g) => s + g.base + g.iva, 0);
-  const pctSobreFacturado = facturadoPeriodo > 0 ? (totalGastosPeriodo / facturadoPeriodo) * 100 : null;
+  const pctSobreFacturado = facturadoBasePeriodo > 0 ? (base / facturadoBasePeriodo) * 100 : null;
 
   // Por categoría (sobre el periodo, sin el filtro de categoría).
   const porCategoria = new Map<CategoriaGasto, number>();
@@ -115,138 +113,18 @@ export default async function Gastos({
     const mes = `${anio}-${String(mesIni + i).padStart(2, "0")}`;
     const esActual = mes === mesActualIso && anio === anioActual;
     const valor = libro.gastos.filter((g) => g.fecha.startsWith(mes)).reduce((s, g) => s + g.base + g.iva, 0);
-    return { label: ETIQUETAS_MES[mesIni + i - 1], valor, pendiente: esActual };
+    return { mes, valor: esActual && !valor ? null : valor, pendiente: esActual };
   });
 
   // Meses del periodo, de más reciente a más antiguo (lista).
   const meses = [...new Set(gastos.map((g) => g.fecha.slice(0, 7)))].sort().reverse();
-
-  const seccionLista =
-    gastos.length === 0 ? (
-      <p className="text-tertiary">No hay gastos en este periodo. Mándale una foto o un PDF al bot.</p>
-    ) : (
-      <div className="flex flex-col gap-4">
-        {meses.map((mes) => {
-          const delMes = gastos.filter((g) => g.fecha.startsWith(mes));
-          const totalMesLista = delMes.reduce((s, g) => s + g.base + g.iva, 0);
-          return (
-            <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(totalMesLista)}>
-              {delMes.map((g) => (
-                <ListItem
-                  key={g.id}
-                  title={
-                    <span className="flex items-center gap-2">
-                      <AvatarProveedor nombre={g.proveedor ?? "?"} size="sm" />
-                      {nombreCorto(g.proveedor ?? "?")}
-                    </span>
-                  }
-                  description={`${fechaES(g.fecha)} · ${g.categoria ? ETIQUETA_CATEGORIA[g.categoria] : "Sin categoría"}`}
-                  value={euros(g.base + g.iva)}
-                  href={g.archivo_path ? `/api/archivo?path=${encodeURIComponent(g.archivo_path)}` : undefined}
-                  badge={{ label: CORTO_IVA[g.tipo] ?? g.tipo, type: "secondary" }}
-                />
-              ))}
-            </ListGroup>
-          );
-        })}
-      </div>
-    );
-
-  const seccionSuscripciones = (
-    <Card className="gap-3">
-      <h2 className="text-eyebrow text-tertiary">Tus suscripciones</h2>
-      {activas.length > 0 ? (
-        <>
-          <div className="flex flex-col gap-1">
-            <div className="text-title">≈ {eurosSinCentimos(totalMes)} al mes</div>
-            <div className="text-caption text-tertiary">
-              {activas.length === 1 ? "1 suscripción activa" : `${activas.length} suscripciones activas`} · ≈ {eurosSinCentimos(totalMes * 12)} al año
-            </div>
-          </div>
-          <ul className="flex flex-col gap-3">
-            {activas.map((a) => (
-              <li key={a.nombre} className="flex items-center gap-3">
-                <AvatarProveedor nombre={a.nombre} size="sm" />
-                <div className="flex flex-col flex-1">
-                  <span>{nombreCorto(a.nombre)}</span>
-                  {a.cambio && (
-                    <span className="text-caption text-tertiary">
-                      {a.cambio.tipo === "sube" ? "↑" : "↓"} antes {eurosSinCentimos(a.cambio.antes)}
-                    </span>
-                  )}
-                </div>
-                <span>{eurosSinCentimos(a.costeMes)}</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p className="text-tertiary">Ninguna detectada todavía.</p>
-      )}
-      {sinFacturaUltimoMes.length > 0 && (
-        <>
-          <div className="h-px bg-separator" />
-          <ul className="flex flex-col gap-1">
-            {sinFacturaUltimoMes.map((s) => (
-              <li key={s.nombre} className="text-body text-tertiary">
-                {nombreCorto(s.nombre)} · sin factura en {nombreMes(`${ultimoMesCerrado}-01`)}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </Card>
-  );
-
-  const seccionCategorias = categorias.length > 0 && (
-    <Card className="gap-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-eyebrow text-tertiary">Por categoría</h2>
-        {categoriaFiltro && (
-          <a href={qs({})}>
-            <Badge type="secondary" closable>
-              {ETIQUETA_CATEGORIA[categoriaFiltro]}
-            </Badge>
-          </a>
-        )}
-      </div>
-      <ul className="flex flex-col gap-2">
-        {categorias.map(([c, importe]) => (
-          <li key={c}>
-            <a href={qs({ categoria: categoriaFiltro === c ? undefined : c })} className="flex flex-col gap-1">
-              <div className="flex items-center justify-between text-body">
-                <span>{ETIQUETA_CATEGORIA[c]}</span>
-                <span>{eurosSinCentimos(importe)}</span>
-              </div>
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${Math.round((importe / totalCategorias) * 100)}%`, backgroundColor: COLOR_CATEGORIA[c] }} />
-              </div>
-            </a>
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-
-  const seccionIva = (
-    <Card className="gap-3">
-      <h2 className="text-eyebrow text-tertiary">¿Por qué casi no hay IVA que deducir?</h2>
-      <GraficoTipoIva
-        parts={[
-          { value: conDeducible, color: "var(--color-chart-primary)", label: "Con IVA deducible" },
-          { value: sinDeducir, color: "var(--color-gray-200)", label: "Sin IVA deducible" },
-        ]}
-      />
-      <p className="text-body">El {pct(pctSinDeducir)} de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir.</p>
-    </Card>
-  );
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title="Gastos" subtitle={`En qué se va el dinero en ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start">
-        <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 flex flex-col gap-6">
+        <div className="flex flex-col gap-6">
           <BloqueResultados>
             <Card className="p-4 lg:p-6 gap-5">
               <CardHeader
@@ -260,13 +138,15 @@ export default async function Gastos({
 
               <div className="h-px bg-separator" />
 
-              <div className="flex flex-col gap-2">
-                <div className="text-display">{euros(base)}</div>
-                <div className="text-caption text-tertiary">
-                  {gastos.length === 1 ? "1 gasto" : `${gastos.length} gastos`} · {euros(iva)} de IVA deducible
+              <div className="flex items-end justify-between gap-4 flex-wrap">
+                <div className="flex flex-col gap-2">
+                  <div className="text-display">{euros(base)}</div>
+                  <div className="text-caption text-tertiary">
+                    {gastos.length === 1 ? "1 gasto" : `${gastos.length} gastos`} · {euros(iva)} de IVA deducible
+                  </div>
                 </div>
                 {pctSobreFacturado !== null && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col items-end gap-2">
                     <Badge type={pctSobreFacturado <= 20 ? "success" : "onhold"}>{pct(pctSobreFacturado, 1)} de lo que facturas</Badge>
                     {pctSobreFacturado <= 20 && <Badge type="secondary">Por debajo del {pct(20)}: sano</Badge>}
                   </div>
@@ -284,30 +164,146 @@ export default async function Gastos({
               {borr.count === 1 ? "1 gasto sin confirmar en el bot." : `${borr.count} gastos sin confirmar en el bot.`}
             </Alert>
           )}
-        </div>
 
-        <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 flex flex-col gap-4">{seccionSuscripciones}</div>
+          {gastos.length === 0 ? (
+            <p className="text-tertiary">No hay gastos en este periodo. Mándale una foto o un PDF al bot.</p>
+          ) : (
+            meses.map((mes) => {
+              const delMes = gastos.filter((g) => g.fecha.startsWith(mes));
+              const totalMesLista = delMes.reduce((s, g) => s + g.base + g.iva, 0);
+              return (
+                <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(totalMesLista)}>
+                  {delMes.map((g) => {
+                    const fila = (
+                      <ListItem
+                        key={g.id}
+                        title={
+                          <span className="flex items-center gap-2">
+                            <AvatarProveedor nombre={g.proveedor ?? "?"} size="sm" />
+                            {nombreCorto(g.proveedor ?? "?")}
+                          </span>
+                        }
+                        description={`${fechaES(g.fecha)} · ${g.categoria ? ETIQUETA_CATEGORIA[g.categoria] : "Sin categoría"}`}
+                        value={euros(g.base + g.iva)}
+                        badge={{ label: CORTO_IVA[g.tipo] ?? g.tipo, type: "secondary" }}
+                      />
+                    );
+                    return g.archivo_path ? (
+                      <VisorArchivo key={g.id} path={g.archivo_path} titulo={nombreCorto(g.proveedor ?? "?")} fecha={fechaES(g.fecha)} importe={euros(g.base + g.iva)}>
+                        {fila}
+                      </VisorArchivo>
+                    ) : (
+                      fila
+                    );
+                  })}
+                </ListGroup>
+              );
+            })
+          )}
 
-        <div className="order-3 lg:order-none lg:col-start-2 lg:row-start-2 flex flex-col gap-4">{seccionCategorias}</div>
-
-        <div className="order-4 lg:order-none lg:col-start-1 lg:row-start-2">{seccionLista}</div>
-
-        <div className="order-5 lg:order-none lg:col-start-2 lg:row-start-3 flex flex-col gap-4">{seccionIva}</div>
-
-        {faltanEsteMes.length > 0 && (
-          <div className="order-6 lg:col-start-1 lg:row-start-3">
+          {faltanEsteMes.length > 0 && (
             <ListGroup label="Faltan este mes">
               {faltanEsteMes.map((nombre) => (
                 <ListItem key={nombre} title={nombreCorto(nombre)} description="Suele llegar cada mes" />
               ))}
             </ListGroup>
-          </div>
-        )}
+          )}
 
-        <p className="order-7 lg:col-start-1 lg:row-start-4 text-caption text-tertiary">
-          ISP: el proveedor no cobra IVA y te lo autorrepercutes y deduces en el 303 (neto 0). Las cuotas de autónomo y la
-          amortización se suman en el P&L de Inicio.
-        </p>
+          <p className="text-caption text-tertiary">
+            ISP: el proveedor no cobra IVA y te lo autorrepercutes y deduces en el 303 (neto 0). Las cuotas de autónomo y la
+            amortización se suman en el P&L de Inicio.
+          </p>
+        </div>
+
+        <aside aria-label="Suscripciones, categorías e IVA" className="flex flex-col gap-4">
+          <Card className="gap-3">
+            <h2 className="text-eyebrow text-tertiary">Tus suscripciones</h2>
+            {activas.length > 0 ? (
+              <>
+                <div className="flex flex-col gap-1">
+                  <div className="text-title">≈ {eurosSinCentimos(totalMes)} al mes</div>
+                  <div className="text-caption text-tertiary">
+                    {activas.length === 1 ? "1 suscripción activa" : `${activas.length} suscripciones activas`} · ≈ {eurosSinCentimos(totalMes * 12)} al año
+                  </div>
+                </div>
+                <ul className="flex flex-col gap-3">
+                  {activas.map((a) => (
+                    <li key={a.nombre} className="flex items-center gap-3">
+                      <AvatarProveedor nombre={a.nombre} size="sm" />
+                      <div className="flex flex-col flex-1">
+                        <span>{nombreCorto(a.nombre)}</span>
+                        {a.cambio && (
+                          <span className="text-caption text-tertiary">
+                            {a.cambio.tipo === "sube" ? "↑" : "↓"} antes {eurosSinCentimos(a.cambio.antes)}
+                          </span>
+                        )}
+                      </div>
+                      <span>{eurosSinCentimos(a.costeMes)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-tertiary">Ninguna detectada todavía.</p>
+            )}
+            {sinFacturaUltimoMes.length > 0 && (
+              <>
+                <div className="h-px bg-separator" />
+                <ul className="flex flex-col gap-1">
+                  {sinFacturaUltimoMes.map((s) => (
+                    <li key={s.nombre} className="text-body text-tertiary">
+                      {nombreCorto(s.nombre)} · sin factura en {nombreMes(`${ultimoMesCerrado}-01`)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </Card>
+
+          {categorias.length > 0 && (
+            <Card className="gap-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-eyebrow text-tertiary">Por categoría</h2>
+                {categoriaFiltro && (
+                  <a href={qs({})}>
+                    <Badge type="secondary" closable>
+                      {ETIQUETA_CATEGORIA[categoriaFiltro]}
+                    </Badge>
+                  </a>
+                )}
+              </div>
+              <ul className="flex flex-col gap-2">
+                {categorias.map(([c, importe]) => (
+                  <li key={c}>
+                    <a href={qs({ categoria: categoriaFiltro === c ? undefined : c })} className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-body">
+                        <span>{ETIQUETA_CATEGORIA[c]}</span>
+                        <span>{eurosSinCentimos(importe)}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${Math.round((importe / totalCategorias) * 100)}%`, backgroundColor: COLOR_CATEGORIA[c] }}
+                        />
+                      </div>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
+
+          <Card className="gap-3">
+            <h2 className="text-eyebrow text-tertiary">¿Por qué casi no hay IVA que deducir?</h2>
+            <GraficoTipoIva
+              parts={[
+                { value: conDeducible, color: "var(--color-chart-primary)", label: "Con IVA deducible" },
+                { value: sinDeducir, color: "var(--color-gray-200)", label: "Sin IVA deducible" },
+              ]}
+            />
+            <p className="text-body">El {pct(pctSinDeducir)} de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir.</p>
+          </Card>
+        </aside>
       </div>
     </div>
   );
