@@ -139,6 +139,7 @@ export function pygHasta(libro: Libro, hasta: string) {
 
 export interface Paso {
   nivel: "urgente" | "pendiente" | "info";
+  clave: "plazo" | "gastos" | "facturar" | "iban" | "direccion" | "mac" | "cuota" | "verifactu";
   texto: string;
   detalle?: string;
   href?: string;
@@ -176,19 +177,20 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
     const abierto = c.hoy >= plazo.apertura;
     pasos.push({
       nivel: abierto && quedan <= 10 ? "urgente" : abierto ? "pendiente" : "info",
+      clave: "plazo",
       texto: abierto
         ? `Presentar ${faltan.join(", ")} del ${plazo.t}T ${plazo.anio}`
         : `Próximo trimestral: ${plazo.t}T ${plazo.anio}`,
       detalle: abierto
         ? `Quedan ${quedan} días (hasta el ${plazo.fin.split("-").reverse().join("/")})`
         : `Se presenta del ${plazo.apertura.split("-").reverse().join("/")} al ${plazo.fin.split("-").reverse().join("/")}`,
-      href: `/trimestre/${plazo.anio}/${plazo.t}`,
+      href: `/impuestos/${plazo.anio}/${plazo.t}`,
     });
     break;
   }
 
   if (c.gastosPorConfirmar > 0) {
-    pasos.push({ nivel: "pendiente", texto: `${c.gastosPorConfirmar} gasto(s) sin confirmar`, detalle: "Confírmalos en el bot" });
+    pasos.push({ nivel: "pendiente", clave: "gastos", texto: `${c.gastosPorConfirmar} gasto(s) sin confirmar`, detalle: "Confírmalos en el bot" });
   }
 
   // Facturación del mes: clientes facturados el mes pasado que aún no tienen factura este mes.
@@ -202,19 +204,20 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
   if (sinFacturar.length) {
     pasos.push({
       nivel: Number(c.hoy.slice(8)) >= 25 ? "pendiente" : "info",
+      clave: "facturar",
       texto: `Facturar este mes a ${sinFacturar.join(", ")}`,
       detalle: "En el bot: «factura a … por …»",
     });
   }
 
-  if (!c.libro.ajustes.iban) pasos.push({ nivel: "pendiente", texto: "Falta tu IBAN para las facturas" });
-  for (const n of c.clientesSinDireccion) pasos.push({ nivel: "pendiente", texto: `Falta la dirección fiscal de ${n}` });
-  if (c.libro.bienesAproximados) pasos.push({ nivel: "info", texto: "Confirmar la fecha de compra del Mac" });
+  if (!c.libro.ajustes.iban) pasos.push({ nivel: "pendiente", clave: "iban", texto: "Falta tu IBAN para las facturas" });
+  for (const n of c.clientesSinDireccion) pasos.push({ nivel: "pendiente", clave: "direccion", texto: `Falta la dirección fiscal de ${n}` });
+  if (c.libro.bienesAproximados) pasos.push({ nivel: "info", clave: "mac", texto: "Confirmar la fecha de compra del Mac" });
   if (!c.libro.cuotasRegistradas) {
-    pasos.push({ nivel: "info", texto: "Cuota de autónomo estimada", detalle: "Pásame los recibos para usar los importes reales" });
+    pasos.push({ nivel: "info", clave: "cuota", texto: "Cuota de autónomo estimada", detalle: "Pásame los recibos para usar los importes reales" });
   }
   if (c.hoy >= "2027-04-01" && c.hoy < "2027-07-01") {
-    pasos.push({ nivel: "pendiente", texto: "Verifactu obligatorio el 1 de julio de 2027", detalle: "Adaptar la emisión de facturas" });
+    pasos.push({ nivel: "pendiente", clave: "verifactu", texto: "Verifactu obligatorio el 1 de julio de 2027", detalle: "Adaptar la emisión de facturas" });
   }
   const orden = { urgente: 0, pendiente: 1, info: 2 } as const;
   return pasos.sort((a, b) => orden[a.nivel] - orden[b.nivel]);

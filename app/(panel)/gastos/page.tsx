@@ -1,6 +1,8 @@
+import { PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { euros, fechaES, hoyMadrid, trimestreDe } from "@/lib/fiscal";
 import { Chips, Fila } from "@/components/Filas";
+import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { db } from "@/lib/db";
 
 const corto: Record<string, string> = {
@@ -12,7 +14,8 @@ const corto: Record<string, string> = {
 
 export default async function Gastos({ searchParams }: { searchParams: Promise<{ anio?: string; t?: string }> }) {
   const sp = await searchParams;
-  const anio = Number(sp.anio ?? hoyMadrid().slice(0, 4));
+  const anioActual = Number(hoyMadrid().slice(0, 4));
+  const anio = Number(sp.anio ?? anioActual);
   const t = sp.t ? Number(sp.t) : null;
   const [libro, borr] = await Promise.all([
     cargarLibro(anio),
@@ -24,10 +27,7 @@ export default async function Gastos({ searchParams }: { searchParams: Promise<{
 
   return (
     <>
-      <div className="cabecera">
-        <h1>Gastos</h1>
-        <span className="sub">{anio}</span>
-      </div>
+      <PageHeader title="Gastos" subtitle={String(anio)} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
       <Chips base="/gastos" actual={t} anio={anio} />
       <div className="kpis" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="kpi"><div className="etq">Gastado (base)</div><div className="valor">{euros(base)}</div></div>
