@@ -37,7 +37,7 @@ export function VisorArchivo({
   return (
     <>
       {cloneElement(children, { onClick: abrir } as Record<string, unknown>)}
-      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} closeLabel="Cerrar">
+      <Sheet open={abierto} onClose={() => setAbierto(false)} title={titulo} closeLabel="Cerrar" side="right" size="lg">
         <div className="flex flex-col gap-3 h-full">
           <p className="text-caption text-tertiary">
             {fecha} · {importe}
