@@ -602,6 +602,57 @@ Rama nueva, `plan/rediseno-b2`, desde `wip/v0`. No se toca `lib/calculo.ts`.
 - **Punto 6 de Configuración, de paso:** con Vela 0.7.0, `NoticeStrip` ya admite `target`; se añade `target="_blank"` al enlace al bot en `app/(panel)/ajustes/page.tsx`, cerrando la desviación apuntada en la B.1.
 - Sin vista previa de Vercel en esta sesión: queda pendiente de que Jose revise visualmente (a 1440 px y 390 px) que coincide con el lienzo «Propuesta 24/11 · Inicio v2» — en especial las dos columnas, el tooltip al pasar el ratón por un mes, los meses destacados con un trimestre elegido, y la atenuación del bloque al cambiar de periodo.
 
+## Fase B.3 · Retoques tras revisar la B.2 (24/11/2026)
+
+**Aprobado por Jose el 24/11/2026.** Diseño en el lienzo, fila «Propuesta 24/11 · Inicio v3 (tras revisar la B.2)»: `InicioEscritorio3` (escritorio, datos de hoy) y `PorHacerEstados` (la columna derecha el 24/11, el 2/01 y el 25/01).
+
+En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.ts`.
+
+**A. Revisión del código de la B.2 (Claude)**
+1. **Tests del punto 6 de la B.2** en `tests/libro.test.ts`:
+   - plazo sin abrir: texto «Presentar el 4T de 2026», detalle «Del 01/01 al 01/02» y `dias` = días hasta la apertura;
+   - plazo abierto: `dias` = días hasta el fin;
+   - «1 gasto sin confirmar» y «2 gastos sin confirmar»;
+   - `cuandoPaso` en los dos casos.
+2. **`cuandoPaso` no lee el texto del detalle.** Decide si el plazo está abierto con `nivel !== "info"` o con un campo `abierto?: boolean` en `Paso`.
+3. **Singular y cero:** «Queda 1 día» / «En 1 día»; con 0, «Último día». También en el detalle «Quedan N días (hasta el …)».
+4. **Badge del drawer** (`AvisosInicio`, móvil): usa `cuandoPaso` cuando hay `dias`.
+
+**B. Selector de año por debajo de la columna derecha**
+5. El `aside` es `sticky` y crea su propia capa, así que la lista del `Dropdown` del año se pinta debajo. En IVAn: la cabecera de Inicio (`PageHeader` o su contenedor) con `relative z-20`. Comprueba que la lista se ve entera por encima de la columna derecha y de «Resultados». Apunta en las notas que el arreglo de fondo es de Vela (la lista del `Dropdown` con `z-50` o en un portal), para su próxima versión.
+
+**C. Periodo por trimestre, no acumulado**
+6. Con 1T…4T, «Resultados» enseña **solo ese trimestre**; con «Año», el acumulado de enero a hoy (como ahora).
+   - Nueva función en `lib/inicio.ts`, `pygTrimestre(libro, anio, t, hasta)`: resta campo a campo `pyg` hasta el fin del trimestre (o `hasta`, si está en curso) menos `pyg` hasta el fin del trimestre anterior (para el 1T, nada que restar). Campos: ingresos, gastos con factura, cuota, amortización, difícil justificación y rendimiento neto. Es lo mismo que ya hace `seriesMensuales` con los meses.
+   - Margen = rendimiento del trimestre / ingresos del trimestre. «≈ X € al mes de media» = rendimiento del trimestre / meses del trimestre transcurridos.
+   - Subtítulo del bloque: «2T · de abril a junio»; si está en curso, «4T · de octubre a hoy».
+   - Cascada con las cifras del trimestre.
+   - Las barras no cambian: el año entero con el trimestre destacado (`highlight`).
+   - Tests: 1T + 2T + 3T = acumulado al 30/09 en cada campo; el 1T es igual al acumulado al 31/03.
+   - En «Cómo se calcula» (fase E) se dirá que el 5 % por trimestre es aproximado (su tope de 2.000 € es anual); aquí no hace falta texto.
+
+**D. Columna derecha en una sola tarjeta (escritorio)**
+7. Una sola `Card` (como «Resultados»; relleno `p-5`) dentro del `aside` sticky:
+   - **Cabecera «Por hacer»:** eyebrow `h2` y, a la derecha, el número de tareas en un `Badge` lila.
+   - **Las tareas:** `NoticeCard size="sm"` con su color de nivel (lila `info`, amarillo `pendiente`, rojo `urgente`), eyebrow «{i} de N · {cuándo}», título, detalle y enlace. **El título no se corta:** hasta dos líneas. Si `NoticeCard size="sm"` de Vela lo corta a una línea sin opción, para y apúntalo (sería un cambio de Vela).
+   - **La tarjeta grande** (`NoticeCard` normal, con X) **solo** cuando la tarea es urgente o desde el día 28, la misma regla que en móvil. Va dentro de la tarjeta, la primera. Así ya lo hace `PorHacerEscritorio`: no cambia.
+   - Sin tareas: la línea «Todo al día» (`text-tertiary`), como ahora.
+   - **Separador** (`h-px bg-separator`).
+   - **«Más detalle»:** eyebrow `h2` y filas con `ListItem` de Vela: título, pista debajo y flecha › a la derecha, enlazando como ahora.
+     - Pista de «Impuestos»: plazo sin abrir → «Próximo: 4T, del 01/01 al 01/02»; plazo abierto → «4T pendiente · del 01/01 al 01/02»; sin plazo pendiente → «Todo presentado».
+     - «En qué se van los gastos»: «2.251 € este año», como ahora.
+   - En móvil no cambia nada: franja, drawer y «Más detalle» al final.
+
+**E. Detalles**
+8. **El «€» no se parte de su cifra:** `euros()` en `lib/fiscal.ts` usa espacio de no separación (` `) antes de «€». Una función `eurosSinCentimos(n)` sustituye los `.replace(/,\d\d €/, " €")` repetidos (`page.tsx`, `Barras.tsx`, `Cascada.tsx`). En «De cada 100 € que facturas, te quedan 70 €.» los dos «€» con ` `. Ajusta los tests de `euros` si comparan el espacio. Ojo: los textos del bot y los PDF también usan `euros()`; con ` ` se ven igual.
+9. **Barras en escritorio sin mes seleccionado por defecto:** el `selectedIndex` por defecto (último mes con datos) solo en móvil. En escritorio, ningún mes en negrita hasta pasar el ratón.
+
+**Comprueba:**
+- `npm test` (con los tests nuevos de A y C), `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=4`, `/?anio=2025` en `200`.
+- Con los datos reales: «Año» igual que ahora (20.572 €); 1T + 2T + 3T = el acumulado al 30/09 que enseñaba la B.2 con 3T (18.778 €).
+- **Vista previa a 1440 px**, comparando con `InicioEscritorio3`: el desplegable del año se abre por encima de todo; la columna derecha es una tarjeta; los títulos de las tareas en dos líneas; «Más detalle» con flechas; «oct» no sale en negrita; «70 €» no se parte. Con 2T, el subtítulo «2T · de abril a junio» y cifras solo de abril a junio.
+- **Vista previa a 390 px:** sin cambios respecto a la B.2, salvo el badge del drawer con «En 38 días».
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**
