@@ -1,0 +1,746 @@
+diff --git a/app/(panel)/anual/[anio]/page.tsx b/app/(panel)/anual/[anio]/page.tsx
+new file mode 100644
+index 0000000..a760a24
+--- /dev/null
++++ b/app/(panel)/anual/[anio]/page.tsx
+@@ -0,0 +1,166 @@
++import Link from "next/link";
++import { notFound } from "next/navigation";
++import { cargarLibro } from "@/lib/libro";
++import { modelo390 } from "@/lib/calculo";
++import { euros, fechaES, hoyMadrid, plazoTrimestral } from "@/lib/fiscal";
++import { Tabla, type Linea } from "@/components/Casillas";
++
++export default async function Anual({
++  params,
++  searchParams,
++}: {
++  params: Promise<{ anio: string }>;
++  searchParams: Promise<{ ultimo?: string }>;
++}) {
++  const { anio: a } = await params;
++  const { ultimo: u } = await searchParams;
++  const anio = Number(a);
++  if (!Number.isInteger(anio)) notFound();
++  const ultimo = u === "devolver" ? "devolver" : "compensar";
++  const libro = await cargarLibro(anio);
++  const plazo = plazoTrimestral(anio, 4);
++  const provisional = hoyMadrid() <= `${anio}-12-31`;
++  const presentado = libro.presentaciones.some((p) => p.modelo === "390" && p.anio === anio);
++
++  let m: ReturnType<typeof modelo390>;
++  try {
++    m = modelo390(libro.datos, anio, ultimo);
++  } catch (e) {
++    return (
++      <>
++        <div className="cabecera">
++          <h1>390 · {anio}</h1>
++          <span className="sub"><Link href={`/trimestre/${anio}/4`}>‹ 4T</Link></span>
++        </div>
++        <section className="card">
++          <p>⛔ {e instanceof Error ? e.message : String(e)}</p>
++        </section>
++      </>
++    );
++  }
++  const t4 = m.trimestres[3];
++  const sinCero = (ls: Linea[]) => ls.filter(([, , v, res]) => v !== 0 || res);
++
++  return (
++    <>
++      <div className="cabecera">
++        <h1>390 · {anio}</h1>
++        <span className="sub"><Link href={`/trimestre/${anio}/4`}>‹ 4T</Link></span>
++      </div>
++      <p className="nota">
++        Resumen anual de IVA. Plazo: hasta el {fechaES(plazo.fin)}, junto al 303 del 4T. Es la suma de tus cuatro 303
++        del año, así que no sale nada nuevo a pagar. Cuando lo presentes, díselo a IVAn: «presentado el 390».
++        {provisional ? " Provisional: el año no ha terminado y las cifras cambian con cada factura y gasto." : ""}
++        {presentado ? " Ya consta como presentado." : ""}
++      </p>
++      {!m.cuadra ? (
++        <section className="card">
++          <p>
++            ⚠️ El resultado anual ({euros(m.c86)}) no coincide con lo que dicen los 303 ({euros(m.c95 - m.c97 - m.c98 - m.c662)}). Revisa
++            los trimestres antes de presentarlo.
++          </p>
++        </section>
++      ) : null}
++
++      <section className="card">
++        <h2>Datos estadísticos</h2>
++        <table className="tabla">
++          <tbody>
++            <tr><td className="cas">Clave</td><td>A05 · Resto de actividades profesionales</td><td></td></tr>
++            <tr><td className="cas">IAE</td><td>El epígrafe de tu alta censal</td><td></td></tr>
++            <tr><td className="cas">347</td><td>Sin marcar: ningún cliente ni proveedor español pasa de 3.005,06 €</td><td></td></tr>
++          </tbody>
++        </table>
++      </section>
++
++      <section className="card">
++        <h2>IVA devengado</h2>
++        <Tabla
++          lineas={[
++            ["05", "Régimen ordinario al 21 %: base", m.c05],
++            ["06", "Régimen ordinario al 21 %: cuota", m.c06],
++            ["551", "Adquisiciones intracomunitarias de servicios al 21 %: base", m.c551],
++            ["552", "Adquisiciones intracomunitarias de servicios al 21 %: cuota", m.c552],
++            ["27", "Otros supuestos de inversión del sujeto pasivo: base", m.c27],
++            ["28", "Otros supuestos de inversión del sujeto pasivo: cuota", m.c28],
++            ["33", "Total bases IVA", m.c33],
++            ["34", "Total cuotas IVA", m.c34],
++            ["47", "Total cuotas IVA y recargo de equivalencia", m.c47, true],
++          ]}
++        />
++      </section>
++
++      <section className="card">
++        <h2>IVA deducible</h2>
++        <Tabla
++          lineas={sinCero([
++            ["190", "Operaciones interiores corrientes al 4 %: base", m.c190],
++            ["191", "Operaciones interiores corrientes al 4 %: cuota", m.c191],
++            ["603", "Operaciones interiores corrientes al 10 %: base", m.c603],
++            ["604", "Operaciones interiores corrientes al 10 %: cuota", m.c604],
++            ["605", "Operaciones interiores corrientes al 21 %: base", m.c605, false],
++            ["606", "Operaciones interiores corrientes al 21 %: cuota", m.c606, false],
++            ["48", "Total operaciones interiores corrientes: base", m.c48, false],
++            ["49", "Total operaciones interiores corrientes: cuota", m.c49, false],
++            ["637", "Adquisiciones intracomunitarias de servicios al 21 %: base", m.c637, false],
++            ["638", "Adquisiciones intracomunitarias de servicios al 21 %: cuota", m.c638, false],
++            ["597", "Total adquisiciones intracomunitarias de servicios: base", m.c597, false],
++            ["598", "Total adquisiciones intracomunitarias de servicios: cuota", m.c598, false],
++            ["64", "Suma de deducciones", m.c64, true],
++            ["65", "Resultado régimen general (47 − 64)", m.c65, true],
++          ])}
++        />
++        <p className="nota">
++          En 605/606 van juntos el IVA español al 21 % y los servicios de fuera de la UE con inversión del sujeto pasivo, igual que en
++          las casillas 28/29 del 303.
++        </p>
++      </section>
++
++      <section className="card">
++        <h2>Resultado de la liquidación</h2>
++        <Tabla
++          lineas={[
++            ["84", "Suma de resultados", m.c84],
++            ["85", "Compensación de cuotas del ejercicio anterior", m.c85],
++            ["86", "Resultado de la liquidación", m.c86, true],
++          ]}
++        />
++      </section>
++
++      <section className="card">
++        <h2>Resultado de las liquidaciones (tus cuatro 303)</h2>
++        <Tabla
++          lineas={[
++            ["95", "Total resultados a ingresar en las autoliquidaciones del ejercicio", m.c95],
++            ["97", "Último periodo: a compensar", m.c97],
++            ["98", "Último periodo: a devolver", m.c98],
++            ["662", "Cuotas pendientes de compensación generadas en el ejercicio", m.c662],
++          ]}
++        />
++        {t4.c71 < 0 ? (
++          <p className="nota">
++            El 303 del 4T sale a tu favor ({euros(-t4.c71)}). En el 4T puedes pedir que te lo devuelvan o dejarlo para compensar en
++            2027; el 390 tiene que decir lo mismo que marques en el 303.{" "}
++            {ultimo === "compensar" ? (
++              <Link href={`/anual/${anio}?ultimo=devolver`}>Ver con devolución ›</Link>
++            ) : (
++              <Link href={`/anual/${anio}`}>Ver con compensación ›</Link>
++            )}
++          </p>
++        ) : null}
++      </section>
++
++      <section className="card">
++        <h2>Volumen de operaciones</h2>
++        <Tabla
++          lineas={[
++            ["99", "Operaciones en régimen general", m.c99],
++            ["103", "Entregas intracomunitarias de bienes y servicios", m.c103],
++            ["110", "Operaciones no sujetas por reglas de localización", m.c110],
++            ["108", "Total volumen de operaciones", m.c108, true],
++          ]}
++        />
++      </section>
++    </>
++  );
++}
+diff --git a/app/(panel)/trimestre/[anio]/[t]/page.tsx b/app/(panel)/trimestre/[anio]/[t]/page.tsx
+index 91c5dbf..ecc1c5e 100644
+--- a/app/(panel)/trimestre/[anio]/[t]/page.tsx
++++ b/app/(panel)/trimestre/[anio]/[t]/page.tsx
+@@ -2,24 +2,7 @@ import Link from "next/link";
+ import { notFound } from "next/navigation";
+ import { cargarLibro, resumenTrimestre } from "@/lib/libro";
+ import { euros, fechaES, plazoTrimestral } from "@/lib/fiscal";
+-
+-type Linea = [string, string, number, boolean?];
+-
+-function Tabla({ lineas }: { lineas: Linea[] }) {
+-  return (
+-    <table className="tabla">
+-      <tbody>
+-        {lineas.map(([cas, txt, v, res]) => (
+-          <tr key={cas + txt} className={res ? "res" : v === 0 ? "cero" : ""}>
+-            <td className="cas">{cas}</td>
+-            <td>{txt}</td>
+-            <td>{euros(v)}</td>
+-          </tr>
+-        ))}
+-      </tbody>
+-    </table>
+-  );
+-}
++import { Tabla } from "@/components/Casillas";
+ 
+ export default async function Trimestre({ params }: { params: Promise<{ anio: string; t: string }> }) {
+   const { anio: a, t: tt } = await params;
+@@ -47,8 +30,8 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
+         <h2>Modelo 303 · IVA {estado("303")}</h2>
+         <Tabla
+           lineas={[
+-            ["01", "Base al 21 %", m303.c01],
+-            ["03", "Cuota al 21 %", m303.c03],
++            ["07", "Base al 21 %", m303.c07],
++            ["09", "Cuota al 21 %", m303.c09],
+             ["10", "Base adquisiciones intracomunitarias", m303.c10],
+             ["11", "Cuota adquisiciones intracomunitarias", m303.c11],
+             ["12", "Base otras operaciones ISP", m303.c12],
+@@ -64,6 +47,7 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
+             ["120", "Operaciones no sujetas (fuera UE)", m303.c120],
+             ["110", "Cuotas a compensar de periodos anteriores", m303.c110],
+             ["78", "Cuotas a compensar aplicadas", m303.c78],
++            ["87", "Cuotas a compensar pendientes para periodos posteriores", m303.c87],
+             ["71", m303.c71 >= 0 ? "Resultado: a ingresar" : "Resultado: a compensar", m303.c71, true],
+           ]}
+         />
+@@ -111,6 +95,16 @@ export default async function Trimestre({ params }: { params: Promise<{ anio: st
+           </table>
+         )}
+       </section>
++
++      {t === 4 ? (
++        <section className="card">
++          <h2>Modelo 390 · resumen anual de IVA</h2>
++          <p className="nota">Se presenta en el mismo plazo que el 303 del 4T.</p>
++          <p>
++            <Link href={`/anual/${anio}`}>Ver las casillas del 390 de {anio} ›</Link>
++          </p>
++        </section>
++      ) : null}
+     </>
+   );
+ }
+diff --git a/app/acceso/route.ts b/app/acceso/route.ts
+index 1885b50..b2083b3 100644
+--- a/app/acceso/route.ts
++++ b/app/acceso/route.ts
+@@ -1,5 +1,5 @@
+ import { NextResponse } from "next/server";
+-import { COOKIE, SESION_DIAS, crearToken, verificarToken } from "@/lib/sesion";
++import { COOKIE, SESION_DIAS, crearToken, rutaSegura, verificarToken } from "@/lib/sesion";
+ 
+ export const runtime = "nodejs";
+ 
+@@ -8,7 +8,7 @@ export async function GET(req: Request) {
+   if (!verificarToken(url.searchParams.get("t"), "enlace")) {
+     return NextResponse.redirect(new URL("/sin-acceso", url));
+   }
+-  const res = NextResponse.redirect(new URL("/", url));
++  const res = NextResponse.redirect(new URL(rutaSegura(url.searchParams.get("ir")), url));
+   res.cookies.set(COOKIE, crearToken("sesion"), {
+     httpOnly: true,
+     secure: url.protocol === "https:",
+diff --git a/components/Casillas.tsx b/components/Casillas.tsx
+new file mode 100644
+index 0000000..7073ff0
+--- /dev/null
++++ b/components/Casillas.tsx
+@@ -0,0 +1,20 @@
++import { euros } from "@/lib/fiscal";
++
++/** [casilla, texto, importe, ¿resultado en negrita?] */
++export type Linea = [string, string, number, boolean?];
++
++export function Tabla({ lineas }: { lineas: Linea[] }) {
++  return (
++    <table className="tabla">
++      <tbody>
++        {lineas.map(([cas, txt, v, res]) => (
++          <tr key={cas + txt} className={res ? "res" : v === 0 ? "cero" : ""}>
++            <td className="cas">{cas}</td>
++            <td>{txt}</td>
++            <td>{euros(v)}</td>
++          </tr>
++        ))}
++      </tbody>
++    </table>
++  );
++}
+diff --git a/lib/agente.ts b/lib/agente.ts
+index a196ccf..c853b03 100644
+--- a/lib/agente.ts
++++ b/lib/agente.ts
+@@ -8,6 +8,7 @@ import { db } from "./db";
+ import { env } from "./env";
+ import { hoyMadrid, rangoTrimestre, round2, trimestreDe } from "./fiscal";
+ import { cargarLibro, contextoPasos, pygHasta, resumenTrimestre, siguientesPasos } from "./libro";
++import { modelo390 } from "./calculo";
+ import { prepararBorrador } from "./facturacion";
+ import { enlacePanel } from "./sesion";
+ import type { Cliente, Factura } from "./db";
+@@ -28,6 +29,7 @@ Reglas:
+ - Los gastos se registran mandando la foto o el PDF de la factura; si te los describe, pídele el documento.
+ - Tú no presentas nada en Hacienda: Jose presenta en la Sede de la AEAT con Cl@ve y luego te lo dice (marcar_presentado).
+ - Clientes UE (Zapflow, Finlandia): sin IVA, inversión del sujeto pasivo, van al 349. Clientes españoles: 21 % de IVA y 15 % de retención.
++- El 390 (resumen anual de IVA) es la suma de los cuatro 303 y se presenta con el del 4T: usa resumen_390.
+ - Si algo es una duda fiscal que no puedes resolver con seguridad, dilo y sugiere consultarlo.`;
+ 
+ const herramientas: Anthropic.Tool[] = [
+@@ -48,6 +50,11 @@ const herramientas: Anthropic.Tool[] = [
+       properties: { anio: { type: "integer" }, trimestre: { type: "integer", minimum: 1, maximum: 4 } },
+     },
+   },
++  {
++    name: "resumen_390",
++    description: "Casillas del modelo 390 (resumen anual de IVA) de un año. Se presenta con el 303 del 4T.",
++    input_schema: { type: "object", properties: { anio: { type: "integer" } } },
++  },
+   {
+     name: "listar",
+     description: "Lista facturas emitidas o gastos de un año, opcionalmente de un trimestre o filtrando por texto (cliente, proveedor, concepto).",
+@@ -124,7 +131,7 @@ async function ejecutar(nombre: string, e: Entrada, acciones: Acciones): Promise
+         anio,
+         trimestre: t,
+         pyg_acumulado: pygHasta(libro, hasta),
+-        m303: { resultado: m303.c71, devengado: m303.c27, deducible: m303.c45, base_21: m303.c01, servicios_ue: m303.c59, presentado: presentado("303") },
++        m303: { resultado: m303.c71, devengado: m303.c27, deducible: m303.c45, base_21_casilla_07: m303.c07, cuota_21_casilla_09: m303.c09, servicios_ue: m303.c59, presentado: presentado("303") },
+         m130: { a_ingresar: m130.aIngresar, rendimiento_neto: m130.c03, pagos_anteriores: m130.c05, retenciones: m130.c06, presentado: presentado("130") },
+         m349: { lineas: m349, presentado: presentado("349") },
+       };
+@@ -145,6 +152,18 @@ async function ejecutar(nombre: string, e: Entrada, acciones: Acciones): Promise
+       );
+       return { total_base: round2(xs.reduce((s, g) => s + g.base, 0)), n: xs.length, gastos: xs.slice(0, 30).map(({ fecha, proveedor, concepto, tipo, base, iva }) => ({ fecha, proveedor, concepto, tipo, base, iva })) };
+     }
++    case "resumen_390": {
++      const anio = Number(e.anio ?? (trimestreDe(hoy).t === 1 ? anioHoy - 1 : anioHoy));
++      const libro = await cargarLibro(anio);
++      const m = modelo390(libro.datos, anio);
++      const { trimestres: _t, ...casillas } = m;
++      return {
++        anio,
++        provisional: hoy <= `${anio}-12-31`,
++        enlace_panel: enlacePanel(`/anual/${anio}`),
++        casillas,
++      };
++    }
+     case "siguientes_pasos":
+       return siguientesPasos(await contextoPasos(hoy)).map(({ texto, detalle, nivel }) => ({ texto, detalle, nivel }));
+     case "marcar_presentado": {
+diff --git a/lib/calculo.ts b/lib/calculo.ts
+index e161fc0..9698206 100644
+--- a/lib/calculo.ts
++++ b/lib/calculo.ts
+@@ -171,7 +171,7 @@ export function modelo130(d: DatosCalc, anio: number, t: number): Modelo130 {
+ export interface Modelo303 {
+   anio: number;
+   t: number;
+-  c01: number; c03: number; // régimen general 21 %
++  c07: number; c09: number; // régimen general 21 % (07 base, 08 tipo, 09 cuota; 01-03 es el 4 %)
+   c10: number; c11: number; // adquisiciones intracomunitarias de servicios (ISP UE)
+   c12: number; c13: number; // otras operaciones con inversión del sujeto pasivo (fuera UE)
+   c27: number; // total devengado
+@@ -183,6 +183,7 @@ export interface Modelo303 {
+   c120: number; // no sujetas por reglas de localización (clientes fuera UE)
+   c110: number; // cuotas a compensar de periodos anteriores
+   c78: number; // compensación aplicada
++  c87: number; // cuotas de periodos anteriores que siguen pendientes (110 − 78)
+   c71: number; // resultado (+ ingresar / − compensar o devolver)
+   pendienteCompensar: number;
+ }
+@@ -193,13 +194,15 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
+   const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
+   const isp = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
+ 
+-  const c01 = suma(fs.filter((f) => f.tipo === "nacional" && f.iva_pct === 21), (f) => f.base);
+-  const c03 = suma(fs, (f) => f.iva);
++  const al21 = fs.filter((f) => f.tipo === "nacional" && f.iva_pct === 21);
++  if (fs.some((f) => f.iva > 0 && f.iva_pct !== 21)) throw new Error("Hay facturas con IVA distinto del 21 %: el 303 de IVAn aún no las contempla");
++  const c07 = suma(al21, (f) => f.base);
++  const c09 = suma(al21, (f) => f.iva);
+   const c10 = suma(isp("ISP UE"), (g) => g.base);
+   const c11 = suma(isp("ISP UE"), (g) => round2(g.base * IVA_ISP));
+   const c12 = suma(isp("ISP fuera UE"), (g) => g.base);
+   const c13 = suma(isp("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
+-  const c27 = round2(c03 + c11 + c13);
++  const c27 = round2(c09 + c11 + c13);
+   const soportado = isp("IVA soportado");
+   const c28 = round2(suma(soportado, (g) => g.base) + c12);
+   const c29 = round2(suma(soportado, (g) => g.iva) + c13);
+@@ -213,7 +216,8 @@ export function modelo303(d: DatosCalc, anio: number, t: number): Modelo303 {
+   const c78 = round2(Math.min(c110, Math.max(c46, 0)));
+   const c71 = round2(c46 - c78);
+   return {
+-    anio, t, c01, c03, c10, c11, c12, c13, c27, c28, c29, c36, c37, c45, c46, c59, c120, c110, c78, c71,
++    anio, t, c07, c09, c10, c11, c12, c13, c27, c28, c29, c36, c37, c45, c46, c59, c120, c110, c78, c71,
++    c87: round2(c110 - c78),
+     pendienteCompensar: round2(c110 - c78 + Math.max(0, -c46)),
+   };
+ }
+@@ -259,3 +263,115 @@ export function modelo349(d: DatosCalc, anio: number, t: number): Linea349[] {
+   }
+   return [...lineas.values()].sort((a, b) => a.clave.localeCompare(b.clave) || b.base - a.base);
+ }
++
++// ---------- Modelo 390 (resumen anual de IVA) ----------
++// Casillas del formulario del ejercicio 2026 (Orden EHA/3111/2009 con los cambios de la Orden
++// HAC/27/2026, que no afectan a estas casillas). Solo las que usa un autónomo en régimen general
++// con ventas al 21 %, servicios a clientes UE y gastos con IVA español o con inversión del sujeto pasivo.
++
++export interface Modelo390 {
++  anio: number;
++  // IVA devengado
++  c05: number; c06: number; // régimen ordinario al 21 % (01-02 es el 4 %, 03-04 el 10 %)
++  c551: number; c552: number; // adquisiciones intracomunitarias de servicios al 21 %
++  c27: number; c28: number; // IVA devengado en otros supuestos de inversión del sujeto pasivo
++  c33: number; c34: number; // total bases y cuotas IVA
++  c47: number; // total cuotas IVA y recargo de equivalencia
++  // IVA deducible
++  c190: number; c191: number; // operaciones interiores corrientes al 4 %
++  c603: number; c604: number; // … al 10 %
++  c605: number; c606: number; // … al 21 %
++  c48: number; c49: number; // total operaciones interiores corrientes
++  c637: number; c638: number; // adquisiciones intracomunitarias de servicios corrientes al 21 %
++  c597: number; c598: number; // total adquisiciones intracomunitarias de servicios
++  c64: number; // suma de deducciones
++  c65: number; // resultado régimen general (47 − 64)
++  // Resultado de la liquidación anual
++  c84: number; // suma de resultados
++  c85: number; // compensación de cuotas del ejercicio anterior
++  c86: number; // resultado de la liquidación (84 − 85)
++  // Resultado de las liquidaciones (las cuatro del 303)
++  c95: number; // total resultados a ingresar en las autoliquidaciones del ejercicio
++  c97: number; // resultado de la última autoliquidación: a compensar
++  c98: number; // resultado de la última autoliquidación: a devolver
++  c662: number; // cuotas pendientes de compensación generadas en el ejercicio (periodos distintos del último)
++  // Volumen de operaciones
++  c99: number; // operaciones en régimen general
++  c103: number; // entregas intracomunitarias de bienes y servicios
++  c110: number; // operaciones no sujetas por reglas de localización
++  c108: number; // total volumen de operaciones
++  trimestres: Modelo303[];
++  /** 86 = 95 − 97 − 98 − 662: si no cuadra, algo no encaja con los 303. */
++  cuadra: boolean;
++}
++
++/** Tipo de IVA de un gasto con IVA soportado (por su cuota), para repartirlo en el 390. */
++function tipoSoportado(g: GastoCalc): 4 | 10 | 21 {
++  const pct = g.base ? Math.round((g.iva / g.base) * 100) : 0;
++  if (pct === 21 || pct === 10 || pct === 4) return pct;
++  throw new Error(`Gasto de ${g.proveedor ?? "?"} del ${g.fecha} con IVA del ${pct} %: el 390 de IVAn solo contempla 4, 10 y 21 %`);
++}
++
++export function modelo390(d: DatosCalc, anio: number, ultimo: "compensar" | "devolver" = "compensar"): Modelo390 {
++  const desde = `${anio}-01-01`;
++  const hasta = `${anio}-12-31`;
++  const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
++  const gs = d.gastos.filter((g) => enRango(g.fecha, desde, hasta));
++  const ts = [1, 2, 3, 4].map((t) => modelo303(d, anio, t));
++  const de = (tipo: GastoCalc["tipo"]) => gs.filter((g) => g.tipo === tipo);
++
++  // Devengado: lo mismo que los cuatro 303, por casillas del 390.
++  const c05 = suma(ts, (t) => t.c07);
++  const c06 = suma(ts, (t) => t.c09);
++  const c551 = suma(de("ISP UE"), (g) => g.base);
++  const c552 = suma(de("ISP UE"), (g) => round2(g.base * IVA_ISP));
++  const c27 = suma(de("ISP fuera UE"), (g) => g.base);
++  const c28 = suma(de("ISP fuera UE"), (g) => round2(g.base * IVA_ISP));
++  const c33 = round2(c05 + c551 + c27);
++  const c34 = round2(c06 + c552 + c28);
++  const c47 = c34;
++
++  // Deducible: el IVA español por tipos; la inversión del sujeto pasivo fuera de la UE se deduce
++  // como operación interior al 21 % (igual que en las casillas 28/29 del 303).
++  const soportado = de("IVA soportado");
++  const porTipo = (pct: 4 | 10 | 21) => soportado.filter((g) => tipoSoportado(g) === pct);
++  const c190 = suma(porTipo(4), (g) => g.base);
++  const c191 = suma(porTipo(4), (g) => g.iva);
++  const c603 = suma(porTipo(10), (g) => g.base);
++  const c604 = suma(porTipo(10), (g) => g.iva);
++  const c605 = round2(suma(porTipo(21), (g) => g.base) + c27);
++  const c606 = round2(suma(porTipo(21), (g) => g.iva) + c28);
++  const c48 = round2(c190 + c603 + c605);
++  const c49 = round2(c191 + c604 + c606);
++  const c637 = c551;
++  const c638 = c552;
++  const c597 = c637;
++  const c598 = c638;
++  const c64 = round2(c49 + c598);
++  const c65 = round2(c47 - c64);
++
++  // Resultado: las cuotas del año anterior que se aplican primero (85) y lo que dejaron los 303.
++  const inicial = d.ivaCompensarInicial;
++  const c85 = round2(Math.min(inicial, suma(ts, (t) => t.c78)));
++  const c84 = c65;
++  const c86 = round2(c84 - c85);
++  const t4 = ts[3];
++  const c95 = suma(ts, (t) => Math.max(t.c71, 0));
++  const negativoUltimo = round2(Math.max(-t4.c71, 0));
++  const c97 = ultimo === "compensar" ? negativoUltimo : 0;
++  const c98 = ultimo === "devolver" ? negativoUltimo : 0;
++  const c662 = round2(Math.max(0, t4.c87 - (inicial - c85)));
++
++  const c99 = c05;
++  const c103 = suma(fs.filter((f) => f.tipo === "ue"), (f) => f.base);
++  const c110 = suma(fs.filter((f) => f.tipo === "fuera_ue"), (f) => f.base);
++  const c108 = round2(c99 + c103 + c110);
++
++  return {
++    anio, c05, c06, c551, c552, c27, c28, c33, c34, c47,
++    c190, c191, c603, c604, c605, c606, c48, c49, c637, c638, c597, c598, c64, c65,
++    c84, c85, c86, c95, c97, c98, c662, c99, c103, c110, c108,
++    trimestres: ts,
++    cuadra: Math.abs(c86 - (c95 - c97 - c98 - c662)) < 0.005,
++  };
++}
+diff --git a/lib/exportar.ts b/lib/exportar.ts
+index 1c8e217..60641e0 100644
+--- a/lib/exportar.ts
++++ b/lib/exportar.ts
+@@ -1,6 +1,6 @@
+ import ExcelJS from "exceljs";
+ import { cargarLibro, resumenTrimestre } from "./libro";
+-import { pyg } from "./calculo";
++import { modelo390, pyg } from "./calculo";
+ import { rangoTrimestre } from "./fiscal";
+ 
+ const EUR = '#,##0.00 "€"';
+@@ -55,8 +55,8 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
+   const fila = (casilla: string, f: (x: (typeof r)[number]) => number) =>
+     tri.addRow({ casilla, t1: f(r[0]), t2: f(r[1]), t3: f(r[2]), t4: f(r[3]) });
+   tri.addRow({ casilla: "MODELO 303 · IVA" }).font = { bold: true };
+-  fila("[01] Base 21 %", (x) => x.m303.c01);
+-  fila("[03] Cuota 21 %", (x) => x.m303.c03);
++  fila("[07] Base 21 %", (x) => x.m303.c07);
++  fila("[09] Cuota 21 %", (x) => x.m303.c09);
+   fila("[10] Base adquisiciones intracomunitarias (ISP)", (x) => x.m303.c10);
+   fila("[11] Cuota", (x) => x.m303.c11);
+   fila("[12] Base otras ISP (fuera UE)", (x) => x.m303.c12);
+@@ -99,5 +99,36 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
+     ["Retenciones soportadas", p.retenciones],
+   ].forEach(([c, v]) => pl.addRow({ c, v }));
+ 
++  // 390: si algún gasto tiene un IVA que el cálculo no contempla, la hoja lo dice en vez de fallar.
++  const r390 = hoja(wb, "390", [
++    { header: "Casilla", key: "c", width: 8 },
++    { header: "Concepto", key: "t", width: 62 },
++    { header: "Importe", key: "v", width: 14, eur: true },
++  ]);
++  try {
++    const m = modelo390(libro.datos, anio);
++    ([
++      ["05", "Régimen ordinario 21 %: base", m.c05], ["06", "Régimen ordinario 21 %: cuota", m.c06],
++      ["551", "Adquisiciones intracomunitarias de servicios 21 %: base", m.c551], ["552", "… cuota", m.c552],
++      ["27", "Otros supuestos de inversión del sujeto pasivo: base", m.c27], ["28", "… cuota", m.c28],
++      ["33", "Total bases IVA", m.c33], ["34", "Total cuotas IVA", m.c34], ["47", "Total cuotas IVA y recargo", m.c47],
++      ["190", "Deducible interiores corrientes 4 %: base", m.c190], ["191", "… cuota", m.c191],
++      ["603", "Deducible interiores corrientes 10 %: base", m.c603], ["604", "… cuota", m.c604],
++      ["605", "Deducible interiores corrientes 21 %: base", m.c605], ["606", "… cuota", m.c606],
++      ["48", "Total interiores corrientes: base", m.c48], ["49", "… cuota", m.c49],
++      ["637", "Deducible adquisiciones intracomunitarias de servicios 21 %: base", m.c637], ["638", "… cuota", m.c638],
++      ["597", "Total adquisiciones intracomunitarias de servicios: base", m.c597], ["598", "… cuota", m.c598],
++      ["64", "Suma de deducciones", m.c64], ["65", "Resultado régimen general", m.c65],
++      ["84", "Suma de resultados", m.c84], ["85", "Compensación de cuotas del ejercicio anterior", m.c85],
++      ["86", "Resultado de la liquidación", m.c86],
++      ["95", "Total a ingresar en las autoliquidaciones", m.c95], ["97", "Último periodo: a compensar", m.c97],
++      ["98", "Último periodo: a devolver", m.c98], ["662", "Cuotas pendientes generadas en el ejercicio", m.c662],
++      ["99", "Operaciones en régimen general", m.c99], ["103", "Entregas intracomunitarias de bienes y servicios", m.c103],
++      ["110", "No sujetas por reglas de localización", m.c110], ["108", "Total volumen de operaciones", m.c108],
++    ] as [string, string, number][]).forEach(([c, t, v]) => r390.addRow({ c, t, v }));
++  } catch (e) {
++    r390.addRow({ c: "", t: `No se puede calcular: ${e instanceof Error ? e.message : String(e)}` });
++  }
++
+   return wb.xlsx.writeBuffer() as Promise<ArrayBuffer>;
+ }
+diff --git a/lib/sesion.ts b/lib/sesion.ts
+index 4a3a068..282f835 100644
+--- a/lib/sesion.ts
++++ b/lib/sesion.ts
+@@ -35,4 +35,8 @@ export function verificarToken(token: string | undefined | null, tipo: Tipo, aho
+   }
+ }
+ 
+-export const enlacePanel = () => `${env.appUrl}/acceso?t=${crearToken("enlace")}`;
++/** Solo rutas internas del panel («/anual/2026»), nunca otra web. */
++export const rutaSegura = (ir: string | null | undefined) => (ir && /^\/(?!\/)[\w\-/]*$/.test(ir) ? ir : "/");
++
++export const enlacePanel = (ir?: string) =>
++  `${env.appUrl}/acceso?t=${crearToken("enlace")}${ir && rutaSegura(ir) !== "/" ? `&ir=${encodeURIComponent(ir)}` : ""}`;
+diff --git a/scripts/integracion/conversaciones.ts b/scripts/integracion/conversaciones.ts
+index b0dd587..70fc9e1 100644
+--- a/scripts/integracion/conversaciones.ts
++++ b/scripts/integracion/conversaciones.ts
+@@ -154,6 +154,23 @@ async function main() {
+     assert.equal(r.m130.a_ingresar, 1141.5);
+   });
+ 
++  await caso("«¿Y el 390?» da las casillas del resumen anual y cuadra con los 303", async () => {
++    let r: any;
++    F.guionClaude.push(agente(usar("resumen_390", { anio: 2026 })), (p) => {
++      r = JSON.parse(p.messages.at(-1).content[0].content);
++      return [texto("ok")];
++    });
++    await mensaje("¿cómo queda el 390?");
++    assert.equal(r.casillas.c86, 207.46);
++    assert.equal(r.casillas.c108, 29460);
++    assert.equal(r.casillas.cuadra, true);
++    assert.equal(r.provisional, true);
++    assert.match(r.enlace_panel, /\/acceso\?t=.+&ir=%2Fanual%2F2026$/);
++    // historial para el caso siguiente
++    F.guionClaude.push((p) => [texto("ok")]);
++    await mensaje("¿cómo va el trimestre?");
++  });
++
+   await caso("La segunda consulta lleva el historial de la primera", async () => {
+     let p: any;
+     F.guionClaude.push((x) => {
+@@ -389,6 +406,13 @@ async function main() {
+     const d = enviados("sendDocument").at(-1);
+     assert.equal(d?.archivo?.nombre, "IVAn-2026.xlsx");
+     assert.equal(d!.archivo!.bytes.subarray(0, 2).toString(), "PK");
++    const ExcelJS = (await import("exceljs")).default;
++    const wb = new ExcelJS.Workbook();
++    await wb.xlsx.load(d!.archivo!.bytes as any);
++    const h = wb.getWorksheet("390");
++    assert.ok(h, "falta la hoja 390");
++    const fila108 = h!.getRows(2, h!.rowCount - 1)!.find((r) => r.getCell(1).value === "108");
++    assert.ok(fila108, "falta la casilla 108");
+   });
+ 
+   await caso("/ajustes enseña los datos y el último número", async () => {
+diff --git a/tests/calculo.test.ts b/tests/calculo.test.ts
+index 099368b..af33103 100644
+--- a/tests/calculo.test.ts
++++ b/tests/calculo.test.ts
+@@ -29,7 +29,7 @@ describe("Hoja de cálculo (cuota 452 €/mes)", () => {
+   it("303 por trimestre", () => {
+     expect([1, 2, 3, 4].map((t) => modelo303(d, 2026, t).c71)).toEqual([-2.42, -0.42, 207.46, 0]);
+     const t3 = modelo303(d, 2026, 3);
+-    expect(t3).toMatchObject({ c01: 1020, c03: 214.2, c10: 76.2, c11: 15.99, c12: 154.73, c13: 32.5, c59: 7560, c110: 2.84 });
++    expect(t3).toMatchObject({ c07: 1020, c09: 214.2, c10: 76.2, c11: 15.99, c12: 154.73, c13: 32.5, c59: 7560, c110: 2.84 });
+   });
+   it("130 por trimestre", () => {
+     expect([1, 2, 3, 4].map((t) => modelo130(d, 2026, t).aIngresar)).toEqual([1216.02, 1272.9, 1141.5, 277.03]);
+diff --git a/tests/modelo390.test.ts b/tests/modelo390.test.ts
+new file mode 100644
+index 0000000..941ab78
+--- /dev/null
++++ b/tests/modelo390.test.ts
+@@ -0,0 +1,81 @@
++import { describe, expect, it } from "vitest";
++import datos from "./fixtures/datos_2026.json";
++import { modelo303, modelo390, type DatosCalc } from "../lib/calculo";
++
++const d: DatosCalc = {
++  facturas: datos.facturas as DatosCalc["facturas"],
++  gastos: datos.gastos as DatosCalc["gastos"],
++  cuotaMes: () => 452,
++  bienes: [],
++  pagado130: () => null,
++  ivaCompensarInicial: 0,
++};
++
++describe("390 de 2026 con los datos hasta octubre", () => {
++  const m = modelo390(d, 2026);
++  const ts = [1, 2, 3, 4].map((t) => modelo303(d, 2026, t));
++  const sum = (f: (x: (typeof ts)[number]) => number) => Math.round(ts.reduce((s, x) => s + f(x), 0) * 100) / 100;
++
++  it("el devengado es la suma de los cuatro 303", () => {
++    expect(m.c05).toBe(sum((t) => t.c07));
++    expect(m.c06).toBe(sum((t) => t.c09));
++    expect(m.c551).toBe(sum((t) => t.c10));
++    expect(m.c552).toBe(sum((t) => t.c11));
++    expect(m.c27).toBe(sum((t) => t.c12));
++    expect(m.c28).toBe(sum((t) => t.c13));
++    expect(m.c34).toBe(sum((t) => t.c27));
++  });
++  it("el deducible es la suma de los cuatro 303", () => {
++    expect(m.c48).toBe(sum((t) => t.c28));
++    expect(m.c49).toBe(sum((t) => t.c29));
++    expect(m.c597).toBe(sum((t) => t.c36));
++    expect(m.c598).toBe(sum((t) => t.c37));
++    expect(m.c64).toBe(sum((t) => t.c45));
++    expect(m.c65).toBe(sum((t) => t.c46));
++  });
++  it("cifras de la hoja", () => {
++    expect(m).toMatchObject({
++      c05: 1020, c06: 214.2,
++      c551: 1008.64, c552: 211.81,
++      c27: 980.61, c28: 205.93,
++      c33: 3009.25, c34: 631.94, c47: 631.94,
++      c605: 1012.66, c606: 212.67, c48: 1012.66, c49: 212.67,
++      c597: 1008.64, c598: 211.81, c64: 424.48, c65: 207.46,
++      c85: 0, c86: 207.46, c95: 207.46, c97: 0, c98: 0, c662: 0,
++      c99: 1020, c103: 28440, c110: 0, c108: 29460,
++    });
++    expect(m.cuadra).toBe(true);
++  });
++  it("todo el IVA español de 2026 es al 21 %", () => {
++    expect(m.c190 + m.c191 + m.c603 + m.c604).toBe(0);
++  });
++});
++
++describe("390: casos que no salen en 2026", () => {
++  const extra = (gastos: DatosCalc["gastos"], facturas: DatosCalc["facturas"] = []): DatosCalc => ({
++    ...d,
++    gastos: [...d.gastos, ...gastos],
++    facturas: [...d.facturas, ...facturas],
++  });
++  it("un gasto al 10 % va a 603/604", () => {
++    const m = modelo390(extra([{ fecha: "2026-11-10", base: 100, iva: 10, tipo: "IVA soportado", proveedor: "Restaurante" }]), 2026);
++    expect([m.c603, m.c604]).toEqual([100, 10]);
++    expect(m.cuadra).toBe(true);
++  });
++  it("si el 4T sale a compensar va a la 97, o a la 98 si se pide devolución", () => {
++    const dd = extra([{ fecha: "2026-11-10", base: 1000, iva: 210, tipo: "IVA soportado", proveedor: "Tienda" }]);
++    const t4 = modelo303(dd, 2026, 4);
++    expect(t4.c71).toBe(-210);
++    expect(modelo390(dd, 2026)).toMatchObject({ c97: 210, c98: 0, cuadra: true });
++    expect(modelo390(dd, 2026, "devolver")).toMatchObject({ c97: 0, c98: 210, cuadra: true });
++  });
++  it("cuotas que quedan sin compensar de trimestres anteriores van a la 662", () => {
++    // Un gasto grande en el 1T: −502,42; el 3T (+210,30) solo compensa una parte
++    const dd = extra([{ fecha: "2026-02-10", base: 2380.95, iva: 500, tipo: "IVA soportado", proveedor: "Ordenador" }]);
++    const m = modelo390(dd, 2026);
++    expect(m).toMatchObject({ c95: 0, c97: 0, c662: 292.54, c86: -292.54, cuadra: true });
++  });
++  it("un IVA raro (p. ej. 5 %) avisa en vez de inventarse la casilla", () => {
++    expect(() => modelo390(extra([{ fecha: "2026-11-10", base: 100, iva: 5, tipo: "IVA soportado" }]), 2026)).toThrow(/5 %/);
++  });
++});
+diff --git a/tests/sesion.test.ts b/tests/sesion.test.ts
+new file mode 100644
+index 0000000..cdf729c
+--- /dev/null
++++ b/tests/sesion.test.ts
+@@ -0,0 +1,14 @@
++import { describe, expect, it } from "vitest";
++import { rutaSegura } from "../lib/sesion";
++
++describe("enlace al panel", () => {
++  it("solo redirige a rutas del propio panel", () => {
++    expect(rutaSegura("/anual/2026")).toBe("/anual/2026");
++    expect(rutaSegura("/trimestre/2026/4")).toBe("/trimestre/2026/4");
++    expect(rutaSegura(null)).toBe("/");
++    expect(rutaSegura("//evil.com")).toBe("/");
++    expect(rutaSegura("https://evil.com")).toBe("/");
++    expect(rutaSegura("/\\evil.com")).toBe("/");
++    expect(rutaSegura("/a?x=//b")).toBe("/");
++  });
++});

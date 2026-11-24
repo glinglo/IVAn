@@ -6,6 +6,7 @@ Herramienta de contabilidad propia de Jose (autónomo, estimación directa simpl
 
 ## Reglas de trabajo
 - Español siempre. Investigar → planificar → ejecutar: no construir, hacer commit ni push sin el OK explícito de Jose.
+- **Reparto:** Claude (proyecto IVAn en claude.ai) investiga y escribe los planes en `docs/planes/`; Jose los aprueba; **Claude Code ejecuta** solo planes con estado «Aprobado» y apunta al final del plan qué hizo. Si el plan no encaja con el código, para y lo apunta; no improvises. Ver `docs/planes/README.md`.
 - Las cifras fiscales salen de `lib/calculo.ts`; cualquier cambio tiene que seguir pasando `tests/calculo.test.ts`, que reproduce la hoja y el P&L de la gestoría.
 - Nunca subir datos personales al repo: `supabase/seed/ajustes.local.sql` (NIF, dirección, IBAN) está en `.gitignore`. Las claves van en `.env.local` y en Vercel.
 - Una factura emitida no se modifica (hay triggers en la base de datos); la emisión pasa solo por `lib/facturacion.ts`, que es donde irá Verifactu (julio de 2027).
