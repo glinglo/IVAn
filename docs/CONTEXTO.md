@@ -1,6 +1,6 @@
 # IVAn: contexto del proyecto
 
-> Documento de traspaso. Resume todo lo hablado y decidido hasta el 17/11/2026 (actualizado tras la Fase 1): la contabilidad de Jose, los datos fiscales de 2026 y el plan de IVAn.
+> Documento de traspaso. Resume todo lo hablado y decidido hasta el 17/11/2026: la contabilidad de Jose, los datos fiscales de 2026 y el plan de IVAn.
 
 ## 1. Qué es y por qué
 
@@ -13,7 +13,6 @@
 ## 2. Forma de trabajar
 
 - **Investigar → planificar → ejecutar.** No construir ni subir código sin un «dale» explícito de Jose.
-- **Reparto (decidido el 17/11/2026):** Claude, en el proyecto de claude.ai, investiga y planifica; los planes van en `docs/planes/` del repo (los leen Claude y Claude Code); Jose los aprueba; **Claude Code ejecuta** en `/Users/usuario/dev/IVAn`. Claude no escribe el código de la app.
 - Siempre en español, directo y sin jerga. A Jose le gustan las comparativas honestas (build vs buy, pros y contras).
 - Claude no presenta nada en Hacienda: prepara las casillas y Jose presenta.
 
@@ -69,9 +68,7 @@
 - Difícil justificación: 5 % con un máximo de 2.000 € (el 10 % de 2026 es solo para Ceuta).
 - El 347 no aplica: ningún cliente ni proveedor español pasa de 3.005,06 €.
 - Verifactu: obligatorio para autónomos desde el 1 de julio de 2027 (RDL 15/2025). La emisión de facturas de IVAn está aislada en un único módulo para adaptarla.
-- **Paralelo con Selfconta (noviembre y diciembre de 2026), decidido el 17/11:** Selfconta sigue emitiendo (00337 de noviembre, 00338 de diciembre) porque obliga a crear la factura allí. IVAn **no emite** en esos meses: registra esas facturas con su número y lleva los gastos y los cálculos en paralelo para compararlos. Las facturas de prueba nunca van al libro real (una emitida no se puede borrar y contaría en el 303 y el 130). **La primera factura real de IVAn es la 00339 (enero de 2027).** Si todo cuadra, Jose se da de baja de Selfconta y de la gestoría en enero.
-- Pendiente de decidir: si la gestoría presenta el 4T (propuesta: pagar enero y usar sus casillas para validar las de IVAn) o lo presenta Jose con IVAn. Preguntárselo a la gestoría y avisarles por el apoderamiento en la Sede.
-- **Copia de seguridad:** tiene que ser gratis. Supabase gratis no guarda copias, así que el bot manda cada 7 días a Telegram un `.json.gz` con todas las tablas (no en GitHub: el repo no puede llevar datos personales). `/copia` la pide al momento; `scripts/restaurar.ts` la restaura.
+- Plan con la gestoría: darla de baja con efecto 1 de enero y hacer el 4T y el 390 con IVAn. Antes, avisarles por el apoderamiento en la Sede.
 
 ## 5. IVAn: el plan aprobado (v0)
 
@@ -93,39 +90,27 @@
 
 ## 6. Estado del código (rama `wip/v0`)
 
-**Hecho y probado (Fase 1, 17/11/2026):**
-- Reglas fiscales y cálculo de 303, 130, 349 y P&L: 23 tests que reproducen la hoja y el P&L de la gestoría.
-- Esquema SQL: numeración sin huecos, facturas emitidas inmutables (probado: no se pueden borrar ni cambiar; dos ✅ a la vez emiten una sola).
-- Prueba de integración (`scripts/integracion/`): Postgres + PostgREST reales con Telegram, Claude, transcripción y tipo de cambio simulados. **32 conversaciones pasan**: facturas (borrador, corrección respondiendo, falta de dirección, emisión, cancelación), gastos (foto en USD, PDF duplicado, corrección), voz, consultas con historial, presentado, cuota, /panel, /exportar, /pdf, /ajustes, avisos y seguridad del webhook y del cron.
-- Panel revisado en móvil contra la base local: Inicio y los cuatro trimestres dan las cifras de la hoja, incluido el IVA a compensar que pasa del 1T y 2T al 3T (2,84 €).
-- Arreglado en la Fase 1: si la factura se emitía y fallaba el envío del PDF, el bot decía «No la he emitido»; el 349 muestra país y número por separado, como los pide la Sede; el NIF del emisor sale con prefijo ES en facturas UE; el aviso de facturar sale desde el día 28 aunque el aviso diario se salte un día; /panel y /exportar en el menú del bot.
-- Guía de puesta en marcha: `docs/PUESTA_EN_MARCHA.md`.
+**Hecho y probado:**
+- Reglas fiscales.
+- Cálculo de 303, 130, 349 y P&L: los tests reproducen la hoja y el P&L de la gestoría.
+- Esquema SQL (probado en Postgres local): numeración sin huecos, facturas emitidas inmutables, cuotas, bienes y presentaciones.
+- Carga de datos de 2026.
+- PDF de factura bilingüe (ES/EN).
 
-**Hecho en la Fase 2 (código, 17/11/2026):**
-- Modo paralelo (`ajustes.emitir_desde`, migración 003): hasta el 1/1/2027 IVAn no emite; lo bloquean el bot y la función de la base de datos. `/ajustes emitir_desde: ninguno` lo quita.
-- Facturas de Selfconta: si el PDF que llega lo ha emitido Jose (su NIF como emisor), IVAn lo lee como factura emitida, enseña «📥 … · 00337» y con ✅ la registra con su número, guarda el PDF original y mueve el contador. Solo acepta la siguiente de la serie; avisa si los importes no son los esperados para ese cliente o si el cliente no existe.
-- Copia de seguridad cada 7 días desde el cron, `/copia` y `scripts/restaurar.ts` (probado: volcar → base vacía → restaurar → todo igual).
-- 27 tests y 47 conversaciones simuladas pasan.
-
-**Planes en `docs/planes/` (aprobados por Jose el 17/11/2026, para Claude Code):**
-- Las Fases 1 y 2 las escribió Claude desde claude.ai, sin plan; Jose decidió dejarlas como base. Plan: [revisión por Claude Code](planes/2026-11-17-revision-fases-1-2.md).
-- **303, casillas 07/09:** las ventas al 21 % van en **07 (base), 08 (tipo) y 09 (cuota)**; 01-03 son el 4 % (instrucciones oficiales del 303 de 2026). IVAn las muestra como 01/03 en el panel, el Excel y el bot. Los 303 de 1T a 3T los presentó la gestoría, así que no hay nada mal presentado. Hay que corregirlo antes del 4T. En la hoja de Claude ya está corregido (Trimestres, filas 12 y 13 → [07] y [09], el 17/11/2026).
-- **Modelo 390:** investigación hecha, con las casillas comprobadas con las fuentes oficiales y las cifras esperadas (con los datos hasta octubre, 86 = 207,46 € y 108 = 29.460 €). La Orden HAC/27/2026 no afecta a Jose. Hay una implementación de referencia en `docs/planes/referencia/303-y-390.patch` (no aplicada).
+**Escrito, pendiente de pruebas de integración:**
+- Panel: Inicio, Ventas, Gastos, detalle del trimestre, acceso por enlace firmado y exportación .xlsx.
+- Bot: agente con herramientas, voz, gastos y facturas.
+- Cron de avisos.
 
 **Falta:**
-- Puesta en marcha real (cuentas y claves de Jose) y prueba con su Telegram, con Claude de verdad: las pruebas simulan sus respuestas, así que falta ver cómo lee los PDF reales de Selfconta y de gastos.
+- Prueba de integración con Postgres + PostgREST local y conversaciones simuladas.
+- Capturas del panel para revisarlo.
+- Guía de puesta en marcha (BotFather, Supabase, Vercel, claves).
+- Prueba real con el Telegram de Jose.
 
 **Datos pendientes de Jose:**
-- PDF de la factura 00336 (dirección de Zapflow) y dirección fiscal de Volta Cultural.
+- PDF de la factura 00336 (dirección de Zapflow).
 - Fecha de compra del Mac.
 - Recibos de autónomo de 2026.
 - Importes reales de los 130 de 1T a 3T.
-- Facturas de gasto que faltan: Cursor de marzo a octubre, Apify de octubre y las de la gestoría.
-
-## 7. Roadmap
-
-1. **Fase 1 · Prueba en local** (hecha el 17/11/2026).
-2. **Fase 2 · Puesta en marcha** (24-29/11): código del modo paralelo y de la copia hecho; falta que Jose cree las cuentas (Supabase en la UE, Vercel, claves con límite de gasto) siguiendo `docs/PUESTA_EN_MARCHA.md` y probarlo con su Telegram.
-3. **Fase 3 · Paralelo** (noviembre y diciembre): registrar 00337 y 00338 de Selfconta, gastos en los dos sitios, comparar; hablar con la gestoría. Ejecutar los planes del 303 y del 390.
-4. **Fase 4 · Cierre del 4T** (enero de 2027): 303, 130, 349 y 390 con casillas, comparados con la hoja (y con los de la gestoría si los presenta). Plazo: lunes 1/02/2027; domiciliación hacia el 25-27/01 (fecha oficial pendiente). 00339 = primera factura real de IVAn.
-5. **2027:** Verifactu antes del 1/07/2027 (vigente según el BOE; se habla de retrasarlo a 2028, revisar en primavera), resumen para la Renta 2026, WhatsApp si encaja.
+- Facturas de gasto que faltan.
