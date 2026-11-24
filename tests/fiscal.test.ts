@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  calcularImportes, clasificarGasto, euros, pct, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
+  calcularImportes, clasificarGasto, euros, formatoSede, pct, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
 } from "../lib/fiscal";
 import { avisosDeHoy } from "../lib/recordatorios";
 import { generarFacturaPDF, limpiar } from "../lib/pdf";
@@ -94,6 +94,12 @@ describe("formato y PDF", () => {
     expect(pct(70)).toBe("70 %");
     expect(pct(7.6, 1)).toBe("7,6 %");
     expect(pct(26.4)).toBe("26 %");
+  });
+  it("formatoSede: sin separador de miles, coma decimal, negativos con -", () => {
+    expect(formatoSede(1216.02)).toBe("1216,02");
+    expect(formatoSede(-32.38)).toBe("-32,38");
+    expect(formatoSede(0)).toBe("0,00");
+    expect(formatoSede(4433.456)).toBe("4433,46");
   });
   it("limpia caracteres que la fuente no pinta", () => {
     expect(limpiar("Disseny i implementació · ✓ → 中")).toBe("Disseny i implementació · ? ? ?");

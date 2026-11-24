@@ -43,12 +43,22 @@ export interface GastoLista {
   categoria: CategoriaGasto | null;
 }
 
+export interface Casillas303 {
+  "110"?: number;
+  "78"?: number;
+  "87"?: number;
+  "71"?: number;
+}
+
 export interface Presentacion {
   modelo: string;
   anio: number;
   trimestre: number;
   importe: number | null;
   fecha: string | null;
+  /** Casillas clave tal como se presentaron (solo el 303): 110, 78, 87 y 71. Solo se muestran; no
+   * entran en ningún cálculo. */
+  casillas: Casillas303 | null;
 }
 
 export interface Libro {
@@ -107,6 +117,10 @@ export async function cargarLibro(anio: number): Promise<Libro> {
   const presentaciones = ((p.data ?? []) as Presentacion[]).map((x) => ({
     ...x,
     importe: x.importe === null ? null : Number(x.importe),
+    // casillas no se pide aquí (cargarLibro es la consulta compartida de todas las páginas): la
+    // pide cargarPresentaciones303() por separado, para no tumbar todo el panel si la migración 008
+    // (presentaciones.casillas) no está aplicada.
+    casillas: null,
   }));
   const cuotaDefecto = Number(ajustes.cuota_autonomo_mensual ?? 0);
 
@@ -142,6 +156,54 @@ export function resumenTrimestre(libro: Libro, t: number) {
 
 export function pygHasta(libro: Libro, hasta: string) {
   return pyg(libro.datos, hasta);
+}
+
+/** Año sin facturas ni gastos en IVAn (presentado por la gestoría, pero sin datos para recalcular). */
+export function sinDatos(libro: Libro): boolean {
+  return libro.facturas.length === 0 && libro.gastos.length === 0;
+}
+
+/** `anioActual` hasta `anioMin`, el más reciente primero: [2026, 2025, 2024, 2023]. */
+export function rangoAniosDesde(anioMin: number, anioActual: number): number[] {
+  return Array.from({ length: anioActual - anioMin + 1 }, (_, i) => anioActual - i);
+}
+
+/** Del primer año con algo en `presentaciones` hasta el actual, el más reciente primero. Para el
+ * selector de año de Impuestos (los de Ventas/Gastos/Inicio solo ofrecen años con facturas o gastos). */
+export async function cargarAniosConPresentaciones(anioActual: number): Promise<number[]> {
+  const r = await db().from("presentaciones").select("anio");
+  if (r.error) throw r.error;
+  const anios = (r.data ?? []).map((x) => x.anio as number);
+  const anioMin = anios.length ? Math.min(...anios, anioActual) : anioActual;
+  return rangoAniosDesde(anioMin, anioActual);
+}
+
+/** Los 303 presentados de todos los años, con sus casillas (para `saldoIvaCompensar`). */
+export async function cargarPresentaciones303(): Promise<Presentacion[]> {
+  const r = await db().from("presentaciones").select("modelo, anio, trimestre, importe, fecha, casillas").eq("modelo", "303").not("casillas", "is", null);
+  // Si la migración 008 (presentaciones.casillas) no está aplicada, esta consulta falla: sin saldo
+  // que avisar en vez de tumbar /impuestos entero.
+  if (r.error) return [];
+  return (r.data ?? []) as Presentacion[];
+}
+
+export interface PagadoAnio {
+  anio: number;
+  total: number;
+}
+
+/** 130 [19] + 303 positivos presentados de cada año, para «Lo pagado cada año» de Impuestos. Tal
+ * cual se presentó (no lo que calcula IVAn): el año en curso solo lleva lo ya presentado. */
+export async function cargarPagadoPorAnio(): Promise<PagadoAnio[]> {
+  const r = await db().from("presentaciones").select("modelo, anio, importe").in("modelo", ["130", "303"]);
+  if (r.error) throw r.error;
+  const porAnio = new Map<number, number>();
+  for (const x of r.data ?? []) {
+    if (x.importe === null) continue;
+    const importe = Number(x.importe);
+    if (x.modelo === "130" || importe > 0) porAnio.set(x.anio, (porAnio.get(x.anio) ?? 0) + importe);
+  }
+  return [...porAnio.entries()].map(([anio, total]) => ({ anio, total: Math.round(total * 100) / 100 })).sort((a, b) => a.anio - b.anio);
 }
 
 // ---------- Ventas: comparativa, próxima factura y dependencia ----------

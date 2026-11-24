@@ -235,3 +235,10 @@ export function pct(n: number, decimales = 0): string {
   const texto = decimales > 0 ? n.toFixed(decimales).replace(".", ",") : String(Math.round(n));
   return `${texto} %`;
 }
+
+/** Como lo pide la Sede: sin separador de miles, coma decimal, negativos con -. 1216.02 -> "1216,02". */
+export function formatoSede(n: number): string {
+  const v = round2(n);
+  const [ent, dec] = Math.abs(v).toFixed(2).split(".");
+  return `${v < 0 ? "-" : ""}${ent},${dec}`;
+}
