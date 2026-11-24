@@ -1104,6 +1104,37 @@ Los datos ya están en Supabase: los importes de `presentaciones` y, desde la mi
 - **`npm test`** (148, sin tests nuevos: esta fase no añade funciones, solo reordena las páginas), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a las trece rutas (las once de la fase D más `/impuestos?anio=2024` e `/impuestos/2024/2`): todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
 - No he podido comprobar la vista a 390 px con una herramienta de captura de pantalla (no disponible en esta sesión): comprobado por lectura del HTML servido que la rama sin datos usa la misma rejilla (`lg:grid-cols-[minmax(0,1fr)_340px]`) y el mismo `flex flex-col gap-8` que 2026, así que en móvil (sin el prefijo `lg:`) debería apilarse igual. Pendiente de que Jose lo confirme en el Mac o en el móvil.
 
+### Retoque D.1: en 2026, lo presentado manda sobre lo calculado (24/11/2026)
+
+En el año en curso, `/impuestos` usa `m130.aIngresar` y `m303.c71` (el cálculo de IVAn) para:
+- la tabla «Presentados»;
+- «Pagado en {año}»;
+- `GraficoPagos`.
+
+El 1T de 2026 se presentó con 1.503,78 € de 130, pero IVAn calcula 1.216,02 € porque cuenta la cuota de autónomo como gasto. Así que la tabla «Presentados» enseña una cifra que no se presentó, y el «Pagado» suma lo que no se pagó.
+
+**Regla:** si el trimestre tiene fila en `presentaciones` con `importe` no nulo, se usa ese importe:
+- para el 130, `importe`;
+- para el 303, `importe` ([71]); en «Pagado» y en el gráfico, `max(0, importe)`.
+
+El cálculo de IVAn solo se usa para los trimestres sin presentar (hoy, el 4T), que siguen marcados como `pendiente` en el gráfico. Es la misma fuente que los años sin datos: la rama con datos solo añade lo calculado donde falta lo presentado.
+
+- **`/impuestos`:**
+  - Tabla, «Pagado en {año}» y gráfico con esa regla.
+  - La nota «El 130 de la gestoría no incluía tu cuota de autónomo como gasto…» se queda, con `algunDifiere` como ahora.
+  - «Lo pagado cada año» ya sale de `presentaciones`; no cambia.
+- **`/impuestos/[anio]/[t]` con datos y el modelo ya presentado:**
+  - La cifra grande es la presentada.
+  - Si difiere, la línea de debajo pasa a «IVAn calcula X € (cuenta tu cuota de autónomo como gasto)», en vez de «Presentado X · IVAn calcula Y».
+  - Las casillas del 130 siguen siendo las calculadas, para ver de dónde sale la diferencia. La [19] se titula «Resultado según IVAn».
+- **Sin presentar:** igual que ahora.
+
+**Comprueba:**
+- `/impuestos` (2026): tabla 1T 130 = 1.503,78 €. «Pagado en 2026» = **4.640,92 €** (IRPF 4.433,46 · IVA 207,46).
+- `/impuestos/2026/1?m=130`: cifra grande 1.503,78 € y «IVAn calcula 1.216,02 €…».
+- 2025 y 2024 siguen como en la D.1.
+- `npm test`, `npm run typecheck`, `next build` y `curl` a las trece rutas.
+
 ## Fase E · Segundo nivel y limpieza
 
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».
