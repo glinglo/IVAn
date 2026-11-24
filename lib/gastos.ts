@@ -75,6 +75,7 @@ export function construirFila(x: GastoExtraido, nifPropio: string, cambio: numbe
     tipo_cambio: cambio,
     desglose,
     a_mi_nombre: aMiNombre,
+    categoria: x.categoria_gasto,
     extraccion: { ...x, notas },
   };
 }

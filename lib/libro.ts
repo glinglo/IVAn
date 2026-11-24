@@ -4,6 +4,7 @@ import { db, getAjustes, nums, type Ajustes } from "./db";
 import { modelo130, modelo303, modelo349, pyg, type DatosCalc, type FacturaCalc, type GastoCalc } from "./calculo";
 import { diasEntre, hoyMadrid, nombreMes, plazoTrimestral, trimestreDe, type Plazo } from "./fiscal";
 import { modoParalelo } from "./externas";
+import type { CategoriaGasto } from "./categorias";
 
 export interface FacturaLista {
   id: string;
@@ -15,9 +16,11 @@ export interface FacturaLista {
   base: number;
   iva_pct: number;
   iva: number;
+  retencion_pct: number;
   retencion: number;
   total: number;
   tipo: FacturaCalc["tipo"];
+  origen: "ivan" | "externa";
   pdf_path: string | null;
 }
 
@@ -36,6 +39,7 @@ export interface GastoLista {
   uso: GastoCalc["uso"];
   manutencion_limite: number | null;
   archivo_path: string | null;
+  categoria: CategoriaGasto | null;
 }
 
 export interface Presentacion {
@@ -64,14 +68,14 @@ export async function cargarLibro(anio: number): Promise<Libro> {
     getAjustes(),
     db()
       .from("facturas")
-      .select("id, numero, fecha, concepto, base, iva_pct, iva, retencion, total, tipo, pdf_path, clientes(nombre, nif)")
+      .select("id, numero, fecha, concepto, base, iva_pct, iva, retencion_pct, retencion, total, tipo, origen, pdf_path, clientes(nombre, nif)")
       .eq("estado", "emitida")
       .gte("fecha", desde)
       .lte("fecha", hasta)
       .order("fecha", { ascending: false }),
     db()
       .from("gastos")
-      .select("id, fecha, proveedor, pais, nif, numero_factura, concepto, tipo, base, iva, desglose, uso, manutencion_limite, archivo_path")
+      .select("id, fecha, proveedor, pais, nif, numero_factura, concepto, tipo, base, iva, desglose, uso, manutencion_limite, archivo_path, categoria")
       .eq("estado", "confirmado")
       .gte("fecha", desde)
       .lte("fecha", hasta)
@@ -84,7 +88,7 @@ export async function cargarLibro(anio: number): Promise<Libro> {
 
   type FilaFactura = Omit<FacturaLista, "cliente" | "nif_cliente"> & { clientes: { nombre: string; nif: string | null } | null };
   const facturas: FacturaLista[] = ((f.data ?? []) as unknown as FilaFactura[]).map(({ clientes, ...x }) => ({
-    ...nums(x, ["base", "iva_pct", "iva", "retencion", "total"]),
+    ...nums(x, ["base", "iva_pct", "iva", "retencion_pct", "retencion", "total"]),
     cliente: clientes?.nombre ?? "?",
     nif_cliente: clientes?.nif ?? null,
   }));
@@ -154,7 +158,7 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 /** "Queda 1 día" / "Quedan N días" / "Último día", o "En 1 día" / "En N días" si el plazo no ha abierto. */
 export function cuandoPaso(p: Paso): string | null {
-  if (p.dias === undefined) return null;
+  if (p.dias === undefined) return p.clave === "facturar" ? "Este mes" : null;
   if (p.dias === 0) return "Último día";
   if (p.abierto) return p.dias === 1 ? "Queda 1 día" : `Quedan ${p.dias} días`;
   return p.dias === 1 ? "En 1 día" : `En ${p.dias} días`;

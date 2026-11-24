@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { env } from "./env";
 import type { LineaIva, TipoCliente, TipoGasto } from "./fiscal";
+import type { CategoriaGasto } from "./categorias";
 
 export const BUCKET = "documentos";
 
@@ -83,6 +84,7 @@ export interface Gasto {
   uso: "manutencion" | "atencion_cliente" | null;
   manutencion_limite: number | null;
   a_mi_nombre: boolean | null;
+  categoria: CategoriaGasto | null;
   archivo_path: string | null;
   estado: "borrador" | "confirmado" | "descartado";
   telegram_message_id: number | null;
