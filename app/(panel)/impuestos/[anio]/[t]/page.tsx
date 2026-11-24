@@ -85,21 +85,26 @@ export default async function Trimestre({
   const titulo349 = "Modelo 349 · UE";
   const titulo = modeloFinal === "303" ? titulo303 : modeloFinal === "130" ? titulo130 : titulo349;
 
+  // Lo que calcula IVAn, aparte de lo que se haya presentado (para la frase y para saber si difiere).
+  let calculado: number | null = null;
   let aIngresarGrande: number | null = null;
   let casillaGrande = "";
   let fraseGrande = "";
   if (modeloFinal === "303") {
-    aIngresarGrande = datos ? m303!.c71 : (p303?.importe ?? 0);
+    calculado = datos ? m303!.c71 : null;
+    // Si ya está presentado, manda lo presentado (lo que de verdad se pagó); si no, lo calculado.
+    aIngresarGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p303?.importe ?? 0);
     casillaGrande = "71";
-    fraseGrande = datos ? frase303(aIngresarGrande) : "";
+    fraseGrande = datos ? frase303(calculado!) : "";
   } else if (modeloFinal === "130") {
-    aIngresarGrande = datos ? m130!.c07 : (p130?.importe ?? 0);
+    calculado = datos ? m130!.c07 : null;
+    aIngresarGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p130?.importe ?? 0);
     casillaGrande = "19";
-    fraseGrande = datos ? frase130(aIngresarGrande, t) : "";
+    fraseGrande = datos ? frase130(calculado!, t) : "";
   }
 
   const difierePresentado =
-    datos && presentadoEste && p?.importe !== null && p?.importe !== undefined && Math.abs(p.importe - (aIngresarGrande ?? 0)) > 0.01;
+    datos && presentadoEste && calculado !== null && p?.importe !== null && p?.importe !== undefined && Math.abs(p.importe - calculado) > 0.01;
 
   return (
     <div className="flex flex-col gap-6">
@@ -141,8 +146,7 @@ export default async function Trimestre({
 
               {difierePresentado && (
                 <p className="text-body">
-                  Presentado {euros(p!.importe!)} · IVAn calcula {euros(aIngresarGrande ?? 0)}.
-                  {modeloFinal === "130" && " El 130 de la gestoría no incluía tu cuota de autónomo como gasto; por eso IVAn calcula otra cifra."}
+                  IVAn calcula {euros(calculado!)}{modeloFinal === "130" ? " (cuenta tu cuota de autónomo como gasto)." : "."}
                 </p>
               )}
 
@@ -204,7 +208,7 @@ export default async function Trimestre({
                       ["04", "20 % del rendimiento neto", m130!.c04],
                       ["05", "Pagos fraccionados anteriores", m130!.c05],
                       ["06", "Retenciones e ingresos a cuenta", m130!.c06],
-                      ["07", "Resultado", m130!.c07],
+                      ["07", "Resultado según IVAn", m130!.c07],
                     ] as [string, string, number][]
                   ).map(([cas, nombre, v]) => (
                     <CopyValue key={cas} code={`[${cas}]`} label={nombre} display={euros(v)} copyText={formatoSede(v)} className={v === 0 ? "opacity-60" : undefined} />

@@ -1135,6 +1135,13 @@ El cálculo de IVAn solo se usa para los trimestres sin presentar (hoy, el 4T), 
 - 2025 y 2024 siguen como en la D.1.
 - `npm test`, `npm run typecheck`, `next build` y `curl` a las trece rutas.
 
+#### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-d`)
+
+- **`/impuestos`:** en la rama `datos`, cada trimestre usa `p303?.importe ?? m303.c71` y `p130?.importe ?? m130.aIngresar` (en vez de siempre lo calculado) para la fila de la tabla, `irpfAnio`/`ivaAnio` y `GraficoPagos`. `pendiente` en el gráfico pasa de "es el trimestre de hoy" a "no tiene `303.importe` presentado", que es justo el 4T mientras no se presente. `algunDifiere` sigue comparando contra el 130 calculado, sin cambios.
+- **`/impuestos/[anio]/[t]`:** separado `calculado` (lo que da `modelo303`/`modelo130`) de `aIngresarGrande` (lo presentado si `presentadoEste`, si no lo calculado); `frase303`/`frase130` siguen leyendo `calculado`, no la cifra grande. La línea de diferencia pasa a «IVAn calcula X €» (con «(cuenta tu cuota de autónomo como gasto)» solo en el 130, como pedía el plan); la rejilla de casillas del 130 sigue viniendo de `calculado` sin tocar, con la [07] retitulada «Resultado según IVAn». El 303 no cambia su rejilla de casillas (ya usaba lo presentado en 110/78/87 desde la D).
+- **Comprobado con los datos reales:** `/impuestos` (2026) → 1T 130 = 1.503,78 € en la tabla, «Pagado en 2026» = 4.640,92 € (IRPF 4.433,46 € · IVA 207,46 €), igual que pide la «Comprueba». `/impuestos/2026/1?m=130` → cifra grande 1.503,78 € y la línea «IVAn calcula X € (cuenta tu cuota de autónomo como gasto)». **La X de esa línea da 1.208,93 €, no los 1.216,02 € del plan**: la cifra exacta depende de la cuota de autónomo y los gastos de enero-marzo tal como están en Supabase en el momento de comprobarlo, que ha podido cambiar entre que se escribió el plan y esta ejecución (unas horas después, el mismo día). La lógica es la correcta (lo presentado manda, lo calculado se explica con el motivo); la cifra exacta no se ha forzado a coincidir. 2025 y 2024 siguen iguales que en la D.1 (comprobado, sin cambios).
+- **`npm test`** (148, sin tests nuevos: este retoque no añade funciones de `lib/`, solo cambia qué datos usan las páginas), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a las trece rutas de la D.1 más `/impuestos/2026/1` y `/impuestos/2026/1?m=130`: todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
+
 ## Fase E · Segundo nivel y limpieza
 
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».

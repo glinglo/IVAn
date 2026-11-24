@@ -44,25 +44,29 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
 
   if (datos) {
     const trimestres = [1, 2, 3, 4].map((t) => ({ t, ...resumenTrimestre(libro, t) })).filter((x) => x.t <= tActual);
-    filas = trimestres.map((x) => {
+    // Si el trimestre ya está presentado, manda lo presentado (lo que de verdad se pagó); el
+    // cálculo de IVAn solo se usa para los que faltan por presentar.
+    const conFuente = trimestres.map((x) => {
       const p303 = libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === x.t);
       const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === x.t);
       if (p130?.importe !== null && p130?.importe !== undefined && Math.abs(p130.importe - x.m130.aIngresar) > 0.01) algunDifiere = true;
       return {
         t: x.t,
         fecha: p303?.fecha ?? p130?.fecha ?? null,
-        c71: x.m303.c71,
-        importe130: x.m130.aIngresar,
+        c71: p303?.importe ?? x.m303.c71,
+        importe130: p130?.importe ?? x.m130.aIngresar,
         presentado130: x.presentado("130"),
+        pendiente: p303?.importe === null || p303?.importe === undefined,
       };
     });
-    irpfAnio = round2Total(trimestres.reduce((s, x) => s + x.m130.aIngresar, 0));
-    ivaAnio = round2Total(trimestres.reduce((s, x) => s + Math.max(0, x.m303.c71), 0));
-    graficoPagos = trimestres.map((x) => ({
+    filas = conFuente.map(({ pendiente, ...x }) => x);
+    irpfAnio = round2Total(conFuente.reduce((s, x) => s + x.importe130, 0));
+    ivaAnio = round2Total(conFuente.reduce((s, x) => s + Math.max(0, x.c71), 0));
+    graficoPagos = conFuente.map((x) => ({
       label: ETIQUETAS_T[x.t - 1],
-      irpf: x.m130.aIngresar,
-      iva: Math.max(0, x.m303.c71),
-      pendiente: esAnioActual && x.t === tHoy,
+      irpf: x.importe130,
+      iva: Math.max(0, x.c71),
+      pendiente: x.pendiente,
     }));
     if (esAnioActual) {
       const presentaciones303 = await cargarPresentaciones303();
