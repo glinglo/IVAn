@@ -30,13 +30,11 @@ export function NavMovil({ trimestreAviso }: { trimestreAviso?: string }) {
     { label: impuestos.label, icon: <impuestos.icon size={20} />, href: impuestos.href, active: impuestos.activo, dot: !!trimestreAviso },
   ];
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">
-      <TabBar
-        items={tabItems}
-        centerAction={{ label: "Abrir el bot", icon: <Send size={22} />, href: BOT_URL, target: "_blank" }}
-        aria-label="Secciones (móvil)"
-      />
-    </div>
+    <TabBar
+      items={tabItems}
+      centerAction={{ label: "Abrir el bot", icon: <Send size={22} />, href: BOT_URL, target: "_blank" }}
+      aria-label="Secciones (móvil)"
+    />
   );
 }
 
@@ -63,7 +61,6 @@ export function NavEscritorio({
       collapsible
       defaultCollapsed={barraContraida}
       onCollapsedChange={onCollapsedChange}
-      className="hidden lg:flex sticky top-0 h-dvh"
       aria-label="Secciones"
       action={{ label: "Abrir el bot", icon: <Send size={16} />, href: BOT_URL, target: "_blank" }}
       footer={

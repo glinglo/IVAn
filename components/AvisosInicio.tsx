@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Badge, Button, NoticeCard, NoticeStrip, Sheet } from "@glinglo/vela-ds";
 import type { Paso } from "@/lib/libro";
+import { avisosVisibles } from "@/lib/inicio";
 
 const BOT_URL = "https://t.me/Ivanelgestorbot";
 
@@ -20,8 +21,7 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
   const [oculto, setOculto] = useState(ocultoHoy);
   const [abierto, setAbierto] = useState(false);
 
-  const tarjeta = destacado && !oculto ? destacado : null;
-  const franja = tarjeta ? resto : destacado ? [destacado, ...resto] : resto;
+  const { tarjeta, franja } = avisosVisibles({ destacado, resto, oculto });
 
   return (
     <>
@@ -30,7 +30,11 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
           variant={tarjeta.nivel === "urgente" ? "urgent" : tarjeta.clave === "facturar" || tarjeta.clave === "gastos" ? "pending" : "brand"}
           title={tarjeta.texto}
           description={tarjeta.detalle}
-          action={{ label: tarjeta.href ? "Ver" : "Abrir el bot", href: tarjeta.href ?? BOT_URL }}
+          action={
+            tarjeta.href
+              ? { label: "Ver", href: tarjeta.href }
+              : { label: "Abrir el bot", href: BOT_URL, target: "_blank" }
+          }
           onDismiss={() => {
             escribirCookieOculta(tarjeta.clave, hoy);
             setOculto(true);
@@ -67,7 +71,7 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
           </Sheet>
         </>
       ) : (
-        !tarjeta && <p className="text-tertiary">Todo al día</p>
+        !tarjeta && <NoticeStrip title="Todo al día" />
       )}
     </>
   );

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
+import { AppShell } from "@glinglo/vela-ds";
 import { exigirSesion } from "@/lib/auth";
 import { contextoPasos, siguientesPasos } from "@/lib/libro";
 import { hoyMadrid } from "@/lib/fiscal";
@@ -15,16 +16,20 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   const cookieStore = await cookies();
   const barraContraida = cookieStore.get("ivan_barra")?.value === "contraida";
   return (
-    <div style={{ display: "flex", minHeight: "100dvh" }}>
-      <Suspense fallback={null}>
-        <NavEscritorio trimestreAviso={trimestreAviso} barraContraida={barraContraida} />
-      </Suspense>
-      <main className="app lg:max-w-5xl lg:pb-10 pb-[calc(96px+env(safe-area-inset-bottom))]" style={{ flex: 1 }}>
-        {children}
-      </main>
-      <Suspense fallback={null}>
-        <NavMovil trimestreAviso={trimestreAviso} />
-      </Suspense>
-    </div>
+    <AppShell
+      sidebar={
+        <Suspense fallback={null}>
+          <NavEscritorio trimestreAviso={trimestreAviso} barraContraida={barraContraida} />
+        </Suspense>
+      }
+      tabBar={
+        <Suspense fallback={null}>
+          <NavMovil trimestreAviso={trimestreAviso} />
+        </Suspense>
+      }
+      mainClassName="app lg:max-w-5xl"
+    >
+      {children}
+    </AppShell>
   );
 }

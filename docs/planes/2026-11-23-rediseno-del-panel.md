@@ -490,6 +490,21 @@ Va en una rama nueva, `plan/rediseno-b1`, desde `wip/v0`. Así no choca con la B
   - en escritorio, la barra sigue fija al hacer scroll y se contrae como antes;
   - el pie de Configuración es una franja.
 
+### Notas de ejecución (Claude Code, 24/11/2026)
+
+- `@glinglo/vela-ds@0.6.0` instalado. Comprobados antes de tocar código: `AppShell` (`sidebar`, `tabBar`, `mainClassName`), `AvatarButton`/`Avatar`, `NoticeCard.action.target` y `NoticeStrip` con `count` opcional, tal como describe el plan.
+- `app/(panel)/layout.tsx`: el `div style={{ display: "flex" }}` y el `main` con estilos a mano se sustituyen por `AppShell`, con `sidebar`/`tabBar` en `Suspense` igual que antes y `mainClassName="app lg:max-w-5xl"`. Sesión, cookie de la barra y aviso del trimestre sin tocar.
+- `components/PanelNav.tsx`: quitado `className="hidden lg:flex sticky top-0 h-dvh"` de `NavEscritorio` y el `<div className="fixed inset-x-0 bottom-0 z-40 lg:hidden">` que envolvía `NavMovil`; lo pone ya `AppShell`.
+- `components/AccionesCabecera.tsx`: el botón con estilos en línea pasa a `<AvatarButton size="md" aria-label="Menú de cuenta" className="lg:hidden"><Avatar initials="J" size="md" /></AvatarButton>` como disparador del `Menu`, como pide el punto 4.
+- `NoticeCard` del bot en otra pestaña: `AvisosInicio.tsx` usa `action.target: "_blank"` cuando el paso no tiene `href` propio (Vela 0.6.0 ya lo admite).
+- `app/(panel)/ajustes/page.tsx`: el pie pasa de `<section className="card"><a>…</a></section>` a `<NoticeStrip title="Para cambiar algo, díselo al bot" subtitle="/ajustes" href={BOT_URL} />`, sin `count`.
+  - **Desviación apuntada:** `NoticeStrip` (tipo `NoticeStripProps` de Vela 0.6.0) no tiene prop `target`, solo `href`. El plan ya preveía este caso («si necesita `target="_blank"` y la franja no lo admite, para y apúntalo»): se deja sin `target`, así que el enlace al bot en Configuración abre en la misma pestaña (antes abría en otra con `target="_blank"` en el `<a>`). Falta en Vela una prop `target` en `NoticeStrip` para igualarlo al resto del panel.
+- Además de lo pedido en el plan, encargado también por Jose en el mismo encargo: `components/AvisosInicio.tsx` ya no repite la lógica de qué se pinta (tarjeta/franja): usa `avisosVisibles` de `lib/inicio.ts` (ya existía, de las correcciones de la fase B) en vez de calcularlo en línea. Y en el `action` de la tarjeta grande, cuando abre el bot (sin `href` propio), lleva `target: "_blank"`.
+- «Todo al día» (punto 7) pasa de `<p className="text-tertiary">Todo al día</p>` a `<NoticeStrip title="Todo al día" />`, sin `count`, `href` ni `onClick`.
+- Comprobado: `npm test` (100 tests, sin cambios porque esta fase no tocaba `lib/`), `npm run typecheck`, `next build` y `next start` (puerto 3177) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4`, `/impuestos/2026/390` y `/ajustes` dan todas `200`.
+- En el HTML de `/`: un solo `<main>`; sin `style="display:flex"` escrito en IVAn. El único `fixed inset-x-0` que aparece es el que pinta el propio `AppShell` de Vela para la `TabBar` (confirmado en `node_modules/@glinglo/vela-ds/dist/index.js`), no código de IVAn.
+- Sin vista previa de Vercel en esta sesión: la comprobación visual (que la «J» siga igual y abra el menú en móvil, que la barra siga fija y se contraiga en escritorio) queda pendiente de que Jose la revise en el despliegue de la rama.
+
 ## Fase B.2 · Inicio v2: bloque «Resultados» y «Por hacer» en tarjetas (24/11/2026)
 
 **Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Inicio v2»: `InicioEscritorio2` e `InicioMovil2`.

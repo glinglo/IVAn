@@ -1,4 +1,4 @@
-import { PageHeader, ListGroup, ListItem, Badge } from "@glinglo/vela-ds";
+import { PageHeader, ListGroup, ListItem, Badge, NoticeStrip } from "@glinglo/vela-ds";
 import { getAjustes, getClientes, db } from "@/lib/db";
 import { amortizacionDelAnio, type BienCalc } from "@/lib/calculo";
 import { euros, fechaES, hoyMadrid } from "@/lib/fiscal";
@@ -93,11 +93,7 @@ export default async function Ajustes() {
         ))}
       </ListGroup>
 
-      <section className="card">
-        <a href={BOT_URL} target="_blank" rel="noreferrer">
-          Para cambiar algo, díselo al bot: /ajustes
-        </a>
-      </section>
+      <NoticeStrip title="Para cambiar algo, díselo al bot" subtitle="/ajustes" href={BOT_URL} />
     </>
   );
 }
