@@ -276,49 +276,299 @@ Lo que vio Jose en la vista previa de la A.3:
 
 ## Fase B · Inicio = resultados y avisos
 
-**Datos** (funciones nuevas puras en `lib/libro.ts`, con tests en `tests/`; sin tocar `calculo.ts`):
-- `seriesMensuales(libro, hasta)`: por mes, ingresos (base de facturas), gastos con factura (base) y cuota de autónomo del mes (`datos.cuotaMes`). Los meses sin factura después del último emitido salen como `pendiente` si son el mes en curso, o vacíos si son futuros.
-- `cascada(pyg)`: Ingresos → − gastos con factura → − cuota → − amortización → − 5 % → rendimiento neto.
-- `salud(libro, pyg)`:
-  - margen = rendimiento / ingresos;
-  - gastos sobre ventas = gastos con factura / ingresos;
-  - dependencia = el cliente con más base / ingresos.
+> **Revisada el 24/11/2026 contra el código de `wip/v0`** (después de fusionar las fases A–A.4). Rama `plan/rediseno-b`, creada desde `wip/v0`. Usa **Vela 0.5.0** (la que ya está instalada) y **no depende de la 0.6.0**, que se hace a la vez en el otro repo.
 
-  Cada uno con su estado según los umbrales de arriba.
-- `estadoYCuota(libro, hasta)`: cuotas pagadas en el periodo, y 130 pagado (de `presentaciones`, importe real; si falta, el calculado, marcado como tal).
-- `clasificarAvisos(pasos, hoy)` devuelve `{ destacado: Paso | null, resto: Paso[] }`:
-  - `destacado` es el primer paso `urgente`, o, si `hoy` es día ≥ 28, el de facturar el mes;
-  - todo lo demás va a `resto`.
+**Lo que no se toca en esta fase**, para no pisar la B.1 ni las fases C y D:
+- `app/(panel)/layout.tsx`, `components/PanelNav.tsx` y `components/AccionesCabecera.tsx`;
+- las páginas de Ventas, Gastos, Impuestos y Configuración;
+- `lib/calculo.ts`.
 
-  Para distinguir el paso de facturar se usa `Paso.clave`, que ya existe desde la fase A.1.
-- **Texto del paso de facturar en modo paralelo:** si `modoParalelo(ajustes, hoy)` (`lib/externas.ts`), el texto es «Registrar la factura de {mes} de {cliente}», con el detalle «La emite Selfconta: mándale el PDF al bot».
+### Datos
 
-**Pantalla `/`** (móvil, de arriba abajo):
-1. `PageHeader`: «Hola, Jose», con el subtítulo «Tus resultados de {año}, hasta hoy». El año va en el `Dropdown`.
-2. Si hay `destacado`: `NoticeCard` (variante `urgent` si es urgente; `pending` si es fin de mes; `brand` en otro caso), con el botón de su acción. Ocultar = guardar en `localStorage` `aviso-oculto:{clave}:{fecha}`; vuelve a salir al día siguiente.
-3. Si hay pasos: `NoticeStrip` («{n} cosas por hacer» · «La próxima: {texto}») que abre un `Sheet` con todos los pasos: título, detalle, `Badge` (pendiente / urgente / «en N días») y la acción (`href` del paso, o «Abrir el bot» si no tiene). Si no hay ninguno: «Todo al día» en la franja, sin drawer.
-4. `SegmentedControl` (filtro): Año · 1T · 2T · 3T · 4T.
-   - Año = `pyg` hasta hoy (o hasta el 31/12 si el año está cerrado).
-   - Un trimestre = `pyg` hasta el final de ese trimestre (acumulado, como el 130). El subtítulo lo dice: «Acumulado hasta el 30/09».
-5. Tarjeta «Rendimiento neto»: `text-display`, con el `Badge` del margen y «≈ X € al mes».
-6. Tarjeta «De lo facturado al rendimiento»: `Waterfall`.
-7. Tarjeta «Ingresos y gastos por mes»: `BarChart` (ingresos en `chart-primary`, gastos = facturas + cuota en `chart-muted`). Nota: «El 5 % se calcula sobre el año».
-8. «Más detalle»: `ListGroup` con 4 `ListItem`:
-   - «Impuestos y cuota» → `/detalle/impuestos-y-cuota`;
-   - «Salud del negocio» → `/detalle/salud` (con el `Badge` «N avisos» si alguno está en riesgo);
-   - «En qué se van los gastos» → `/gastos`;
-   - «Cómo se calcula» → `/detalle/como-se-calcula`.
+Funciones nuevas **puras** en un fichero nuevo, `lib/inicio.ts` (así no se mezclan con los pasos de `lib/libro.ts`), con sus tests en `tests/inicio.test.ts`. Usan `pyg` y `meses` de `lib/calculo.ts` **sin modificarlo**.
 
-En escritorio, lo mismo en filas `flex-wrap`:
-- aviso a todo el ancho;
-- rendimiento (1/3) y cascada (2/3);
-- barras (2/3) y «Más detalle» (1/3).
+- **`seriesMensuales(libro, hasta)`:** un elemento por mes, desde enero hasta el mes de `hasta`: `{ mes: "YYYY-MM", ingresos, gastos, cuota, pendiente }`.
+  - **Cómo calcularlo para que cuadre siempre con `pyg`:** cada mes es la diferencia entre dos acumulados, `pyg(libro.datos, finDeMes)` menos `pyg(libro.datos, finDelMesAnterior)` (en enero, lo de enero). Así se respetan los límites de restauración que aplica `pyg`, sin volver a calcularlos.
+    - `ingresos` = diferencia de `ingresos`;
+    - `gastos` = diferencia de `gastosFacturas`;
+    - `cuota` = diferencia de `seguridadSocial`.
+  - El último mes usa `hasta` en vez de fin de mes.
+  - `pendiente: true` solo en el mes en curso (el de `hasta`, si el año es el actual) mientras no tenga ninguna factura.
+- **`cascada(p)`**, con `p` el resultado de `pyg`: las filas para `Waterfall`.
+  - Ingresos (`total`);
+  - − gastos con factura, − cuota de autónomo, − amortización y − 5 % de difícil justificación (`minus`);
+  - rendimiento neto (`result`).
+
+  Etiquetas en español claro: «Ingresos», «Gastos con factura», «Cuota de autónomo», «Amortización», «Difícil justificación (5 %)», «Rendimiento neto». Si una fila es 0, se queda (con 0 €): así siempre se ve la misma estructura.
+- **`salud(libro, p)`:** tres indicadores `{ clave, valor, estado: "bien" | "atencion" | "riesgo" }`, con los umbrales de «Decisiones»:
+  - **margen** = rendimiento neto / ingresos: `bien` si ≥ 50 %, `atencion` si no;
+  - **gastos sobre ventas** = gastos con factura / ingresos: `bien` si ≤ 20 %, `atencion` si no;
+  - **dependencia** = base del cliente con más facturación / ingresos, en el mismo periodo que `p`: `riesgo` si ≥ 70 %, `bien` si no. Devuelve también el nombre del cliente.
+
+  Con ingresos 0, los tres devuelven `valor: null` y `estado: "bien"`. Nada de dividir por cero.
+- **`estadoYCuota(libro, hasta)`:**
+  - cuota de autónomo pagada en el periodo (= `seguridadSocial` de `pyg`);
+  - 130 pagado: suma por trimestre cerrado del importe real de `presentaciones` (modelo `130`); si falta, el calculado con `modelo130`, marcado `estimado: true`.
+
+  No se pinta en esta fase: lo usará la pantalla «Impuestos y cuota» de la fase E. Se hace ahora con sus tests para que la E solo pinte.
+- **`clasificarAvisos(pasos, hoy)`** devuelve `{ destacado: Paso | null, resto: Paso[] }`:
+  - **`destacado`:** el primer paso con `nivel === "urgente"`. Si no hay ninguno y el día de `hoy` es **≥ 28**, el primer paso con `clave === "facturar"` o, si no hay, con `clave === "gastos"`.
+  - **`resto`:** todos los demás, en el mismo orden. El destacado no se repite.
+- **Texto del paso de facturar en modo paralelo:** si `modoParalelo(ajustes, hoy)` (`lib/externas.ts`), el paso `facturar` que genera `siguientesPasos` dice «Registrar la factura de {mes} de {cliente}», con el detalle «La emite Selfconta: mándale el PDF al bot». Es el único cambio en `lib/libro.ts`, con su test en `tests/libro.test.ts`.
+
+### Periodo
+
+- Parámetro de URL **`periodo`**: `anio` (por defecto) | `1` | `2` | `3` | `4`. Convive con `?anio=`.
+- **`hasta` según el periodo:**
+  - `anio` → hoy si el año es el actual, o el 31/12 si está cerrado;
+  - trimestre `t` → el último día de ese trimestre, o hoy si el trimestre está en curso.
+
+  Es **acumulado desde enero**, como el 130. Los trimestres futuros del año actual salen desactivados en el control.
+- El subtítulo lo dice:
+  - «Tus resultados de {año}, hasta hoy»;
+  - «Tus resultados de {año} (año cerrado)»;
+  - «Acumulado hasta el 30/09».
+
+### Componentes de cliente nuevos
+
+Por la regla técnica de arriba: ninguna función cruza desde la página.
+- **`components/Periodo.tsx`:** `SegmentedControl` (Año · 1T · 2T · 3T · 4T). Su `onChange` cambia `?periodo=` con `router.push` y mantiene `?anio=`. Recibe `{ valor, anio, disponibles }`.
+- **`components/Cascada.tsx`:** `Waterfall` con el `format` de euros dentro, sin céntimos (`euros(n).replace(/,\d\d €/, " €")`, como hoy). Recibe las filas.
+- **`components/Barras.tsx`:** `BarChart` con dos series:
+  - «Ingresos» en `var(--color-chart-primary)`;
+  - «Gastos» = gastos con factura + cuota, en `var(--color-chart-muted)`.
+
+  `pending` en el mes pendiente y etiquetas de mes cortas («ene», «feb»…). Recibe la serie. Comprueba los nombres exactos de los tokens de gráfico en `theme.css` de Vela antes de usarlos.
+- **`components/AvisosInicio.tsx`**, que recibe `{ destacado, resto, ocultoHoy }`:
+  - **Tarjeta grande:** si hay `destacado` y `!ocultoHoy`, `NoticeCard`:
+    - variante `urgent` si su nivel es `urgente`, `pending` si viene por el día 28, `brand` en otro caso;
+    - `action` con su `href`, o «Abrir el bot» (`https://t.me/Ivanelgestorbot`) si no tiene;
+    - `onDismiss` escribe la cookie `ivan_aviso_oculto={clave}:{hoy}` (`path=/`, un día, `SameSite=Lax`) y la oculta.
+
+    **Cookie y no `localStorage`:** la página la lee en el servidor y no pinta la tarjeta, así no aparece y desaparece al cargar. Es el mismo patrón que la barra contraída. Al día siguiente la fecha ya no coincide y vuelve a salir.
+  - **Franja:** si `resto.length > 0`, `NoticeStrip` con `count={resto.length}`, título «{n} cosas por hacer» («1 cosa por hacer» si es una) y subtítulo «La próxima: {texto del primero}». Al pulsarla abre un `Sheet` «Por hacer» con todos los pasos de `resto`:
+    - título y detalle;
+    - `Badge` según el nivel: `urgente` → «Urgente», `pendiente` → «Pendiente», `info` → sin badge;
+    - la acción: `Button` `secondary` `size="sm"` con el `href` del paso, o «Abrir el bot» si no tiene.
+  - **Si `resto` está vacío y no hay destacado:** una línea de texto «Todo al día» con `text-tertiary`, sin franja ni drawer. **No usar `NoticeStrip` con `count={0}`**: la franja sin número llega con Vela 0.6.0, en la fase B.1.
+
+### Pantalla `/`
+
+Reescribir `app/(panel)/page.tsx`. Sigue siendo de servidor y solo pasa datos.
+
+**Móvil**, de arriba abajo:
+1. `PageHeader` «Hola, Jose», con el subtítulo del periodo y `actions={<AccionesCabecera anio anioActual />}`, igual que ahora.
+2. `AvisosInicio`.
+3. `Periodo`.
+4. **Tarjeta «Rendimiento neto»:**
+   - la cifra en `text-display`;
+   - el `Badge` del margen («Margen 70 %», `success` si `bien`, `onhold` si `atencion`);
+   - debajo, «≈ X € al mes» (rendimiento / meses transcurridos del periodo, sin céntimos).
+5. **Tarjeta «De lo facturado al rendimiento»:** `Cascada`.
+6. **Tarjeta «Ingresos y gastos por mes»:** `Barras`, con la nota «El 5 % y la amortización se calculan sobre el año».
+7. **«Más detalle»:** `ListGroup` con los destinos que **ya existen**:
+   - «Impuestos» → `/impuestos` (con `?anio=`);
+   - «En qué se van los gastos» → `/gastos` (con `?anio=`).
+
+   «Salud del negocio», «Impuestos y cuota» y «Cómo se calcula» se añaden en la fase E, cuando existan sus páginas. **Nada de enlaces a páginas que aún dan 404.**
+
+**Las tarjetas:** `Card` de Vela (no tiene prop de título), con el título dentro como `<h2 className="text-eyebrow text-tertiary">`, el estilo por defecto de los títulos de tarjeta. Sin el CSS antiguo (`.card`, `.kpis`, `.filas`) en esta página.
+
+**Escritorio (`lg`)**, en filas con `flex-wrap` y `gap` de Vela:
+- aviso (tarjeta o franja) a todo el ancho;
+- rendimiento (1/3) + cascada (2/3);
+- barras (2/3) + «Más detalle» (1/3).
+
+**Se quita de Inicio:** los tres KPI antiguos, «Siguientes pasos» (ahora es el aviso), «Pérdidas y ganancias» (ahora es la cascada) y «Trimestres» (están en Impuestos). Si `components/Filas.tsx` deja de usarse en todo el panel, **no lo borres**: eso es de la fase E.
+
+### Comprueba
+
+- **`npm test`**, con los tests nuevos de `tests/inicio.test.ts`:
+  - **`seriesMensuales`:** la suma de los 12 meses es igual al `pyg` del 31/12 en ingresos, gastos con factura y cuota, al céntimo, con los datos de prueba de `tests/calculo.test.ts`. Y lo mismo hasta una fecha a mitad de mes.
+  - **`cascada`:** el último valor es el `rendimientoNeto` de `pyg`.
+  - **`salud`:** los tres umbrales justo en el límite (50 %, 20 %, 70 %) y con ingresos 0.
+  - **`clasificarAvisos`** con fechas fijas:
+    - 24/11 sin urgentes → `destacado` null;
+    - 28/11 con paso `facturar` → destacado;
+    - 28/11 con `gastos` y sin `facturar` → destacado el de gastos;
+    - 29/01 con un plazo urgente → destacado el urgente.
+  - **`estadoYCuota`:** con y sin el importe real del 130.
+- **`npm run typecheck`, `next build` y `next start`:**
+  - `curl` con cookie de sesión a `/`, `/?periodo=3`, `/?anio=2025` y `/?anio=2025&periodo=4`: todas dan 200;
+  - el resto de páginas del panel también.
+- **Con los datos reales a hoy:** el rendimiento neto de `/` es el mismo que daba la página antigua y que da `pyg` (en torno a 20.600 €, y sale de `pyg`, no se escribe). Apunta la cifra en las notas.
+- **Vista previa** (Jose):
+  - sin cosas urgentes y antes del día 28, se ve la franja y no la tarjeta grande;
+  - la franja abre el drawer con todos los pasos;
+  - al cambiar de periodo, cambian la cifra, la cascada y el subtítulo;
+  - en escritorio, las tres filas.
+
+### Notas de ejecución (Claude Code, 24/11/2026)
+
+- `lib/inicio.ts` y `tests/inicio.test.ts` hechos tal cual el plan: `seriesMensuales`, `cascada`, `salud`, `estadoYCuota` y `clasificarAvisos`, con `pyg` y `meses` de `lib/calculo.ts` sin tocarlo. `npm test` pasa (12 ficheros, 96 tests con los nuevos).
+- `estadoYCuota`: "por trimestre cerrado" se interpretó como los trimestres cuyo `rangoTrimestre(...).hasta <= hasta`; el trimestre en curso no entra en la suma. No se pinta en esta fase (queda para la pantalla «Impuestos y cuota» de la fase E), como dice el plan.
+- Texto de `facturar` en modo paralelo: añadido en `lib/libro.ts` con `modoParalelo` de `lib/externas.ts` y `nombreMes` de `lib/fiscal.ts`, con su test en `tests/libro.test.ts`.
+- **Desviación del plan, apuntada como pide la regla de trabajo:** `SegmentedControlOption` de Vela 0.5.0 no tiene campo para deshabilitar una opción (solo `label`/`value`), así que «los trimestres futuros del año actual salen desactivados en el control» se implementó quitándolos de la lista en vez de mostrarlos deshabilitados. `components/Periodo.tsx` filtra `disponibles` del lado del servidor (calculado en la página con el trimestre de hoy). Si Jose prefiere verlos deshabilitados en gris, hace falta en Vela una prop `disabled` por opción (fuera del alcance de esta fase).
+- Badges de `AvisosInicio` (franja → Sheet «Por hacer»): como el plan no fija qué `BadgeType` usar para «Urgente»/«Pendiente», se eligió `destructive` para urgente y `onhold` (el mismo que ya usa el badge de trimestre en la barra lateral) para pendiente.
+- `NoticeCard` `action`: cuando el paso no tiene `href` propio, se usa el bot (`https://t.me/Ivanelgestorbot`) con la etiqueta «Abrir el bot»; con `href` propio la etiqueta es «Ver» (el tipo `action` de `NoticeCard` en 0.5.0 no admite `target`, así que no se puede abrir en otra pestaña — solo aplica al enlace del bot, que de todas formas es interno al panel salvo cuando no hay `href`).
+- `app/(panel)/layout.tsx`, `components/PanelNav.tsx`, `components/AccionesCabecera.tsx`, las páginas de Ventas/Gastos/Impuestos/Configuración y `lib/calculo.ts` no se han tocado, tal como pide esta fase.
+- Comprobado: `npm test`, `npm run typecheck`, `next build` y `next start` (puerto 3177, el 3100/3101 estaban ocupados en esta máquina) con `curl` y cookie de sesión real: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4`, `/impuestos/2026/390` y `/ajustes` dan todas `200`.
+- **Cifra real a hoy (24/11/2026):** rendimiento neto de `/` = **20.572,12 €**, igual que el que da `pyg(libro.datos, hoy)` (no escrito a mano). Está en el entorno de los ~20.600 € que estimaba el plan.
+- Sin vista previa de Vercel disponible en esta sesión (sin acceso al navegador): la comprobación visual de la franja/tarjeta, el drawer «Por hacer», la cascada y las barras con los tokens de marca queda pendiente de que Jose la revise en el despliegue de la rama.
+
+### Correcciones de la revisión (Claude Code, 24/11/2026)
+
+- **Tarjeta y franja a la vez:** `avisosVisibles({ destacado, resto, oculto })` nueva en `lib/inicio.ts` (con tests en `tests/inicio.test.ts`, incluido el caso del 28/11 con tarjeta y franja juntas). `components/AvisosInicio.tsx` ya no sale de la función al pintar la tarjeta: calcula `tarjeta`/`franja` con la misma regla (destacado visible → franja = resto; destacado oculto → franja = [destacado, ...resto]) y pinta ambas piezas en el mismo fragmento. «Todo al día» solo cuando no hay tarjeta y la franja está vacía.
+- **Ancho de escritorio:** añadido `lg:max-w-5xl` a la clase del `<main>` en `app/(panel)/layout.tsx`, como único cambio de esta fase en el layout.
+- **Tarjetas siempre en columna en móvil:** las 4 `Card` de `app/(panel)/page.tsx` llevan `basis-full` además de su `lg:basis-…`.
+- **`?periodo=` futuro:** en `app/(panel)/page.tsx`, cuando `anio === anioActual` y el trimestre pedido no está en curso, `hasta` se limita a `min(rangoTrimestre(anio, periodo).hasta, hoy)` (comparación de cadenas ISO).
+- Comprobado: `npm test` (100 tests, con los 3 casos nuevos de `avisosVisibles` y el del 28/11), `npm run typecheck`, `next build` y `next start` (puerto 3100) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/?periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4`, `/impuestos/2026/390` y `/ajustes` dan todas `200`.
+- Sin vista previa de Vercel en esta sesión: la comprobación visual (filas de escritorio a 1440 px, columna única a 390 px) queda pendiente de que Jose la revise en el despliegue de la rama.
+
+### Correcciones de la revisión (Claude, 24/11/2026)
+
+Se hacen en la misma rama `plan/rediseno-b`, **antes de fusionar el PR #11**. Siguen con Vela 0.5.0.
+
+1. **La tarjeta grande no debe esconder la franja.**
+   - **El fallo:** hoy `AvisosInicio` devuelve solo la `NoticeCard` cuando hay destacado. Del día 28 en adelante, o con un plazo urgente, el resto de cosas por hacer desaparece de Inicio.
+   - **El arreglo:**
+     - **Tarjeta:** se pinta si hay `destacado` y no está oculto.
+     - **Franja:** se pinta debajo si la lista para la franja no está vacía. La lista es `resto`, más el `destacado` al principio si el usuario lo ha ocultado. Ocultar la tarjeta no borra la tarea: pasa a la franja y al drawer.
+     - **«Todo al día»:** solo si no hay destacado y `resto` está vacío.
+   - **Tests:** añadir a `tests/inicio.test.ts`, o en una función pura nueva `avisosVisibles({ destacado, resto, oculto })` en `lib/inicio.ts`, los casos:
+     - destacado visible con resto → tarjeta y franja con el resto;
+     - destacado oculto → sin tarjeta y franja con el destacado primero;
+     - sin nada → «Todo al día».
+2. **El escritorio está limitado a 560 px.**
+   - **El fallo:** el `main` lleva la clase antigua `.app` (`max-width: 560px`), así que en escritorio la fila «rendimiento (1/3) + cascada (2/3)» deja la tarjeta del rendimiento en unos 180 px.
+   - **El arreglo:** en `app/(panel)/layout.tsx`, añadir `lg:max-w-5xl` (1024 px) a la `className` del `main`. Es el **único** cambio permitido en el layout en esta fase. Las utilidades ganan a `.app` desde la fase A.4. Las páginas aún sin rediseñar se verán más anchas en escritorio: es aceptable hasta las fases C y D.
+3. **En móvil, las tarjetas tienen que ir siempre una debajo de otra.**
+   - **El fallo:** con `flex-wrap` y sin `basis`, en anchos intermedios (una tablet, por ejemplo) dos tarjetas estrechas pueden quedar lado a lado.
+   - **El arreglo:** las cuatro `Card` de Inicio llevan `basis-full` y su `lg:basis-…` actual.
+4. **Un `?periodo=` futuro.** Si llega por URL un trimestre que aún no ha empezado (p. ej. `?periodo=4` en septiembre), `hasta` no puede pasar de hoy: limitarlo con `min(hasta, hoy)` cuando el año es el actual.
 
 **Comprueba:**
-- Los tests nuevos:
-  - `seriesMensuales` cuadra con los totales de `pyg`;
-  - `clasificarAvisos` funciona con fechas fijas: 23/11, 28/11 y 29/01.
-- Con los datos reales a 23/11: rendimiento ≈ 20.582 € y margen 70 %. Se ve la franja y no hay tarjeta grande.
+- `npm test` con los casos nuevos, `npm run typecheck`, `next build` y `next start` con todas las páginas en 200 (incluida `/?periodo=4` en el año actual).
+- Con un `hoy` simulado al 28/11 en un test: tarjeta y franja a la vez.
+- **Vista previa:**
+  - a 1440 px, las filas de escritorio con la tarjeta del rendimiento a un tercio de ~1.000 px;
+  - a 390 px, todo en una columna.
+
+## Fase B.1 · Estructura con Vela 0.6.0 (24/11/2026)
+
+**Empieza solo cuando se cumplan las dos cosas:**
+- Vela 0.6.0 está publicada;
+- la fase B está fusionada en `wip/v0`.
+
+Va en una rama nueva, `plan/rediseno-b1`, desde `wip/v0`. Así no choca con la B, porque las dos tocan Inicio.
+
+1. **`npm install @glinglo/vela-ds@0.6.0`.**
+2. **`app/(panel)/layout.tsx`:**
+   - sustituir el `div` con `display: flex` y el `main` con márgenes a mano por `AppShell`;
+   - `sidebar={<Suspense fallback={null}><NavEscritorio …/></Suspense>}`;
+   - `tabBar={<Suspense fallback={null}><NavMovil …/></Suspense>}`;
+   - `mainClassName="app lg:max-w-5xl"` (el ancho de escritorio de las correcciones de la fase B).
+
+   Se mantienen la sesión, la cookie de la barra y el aviso del trimestre tal cual.
+3. **`components/PanelNav.tsx`:**
+   - quitar de `NavEscritorio` el `className="hidden lg:flex sticky top-0 h-dvh"`;
+   - quitar de `NavMovil` el `div` `fixed inset-x-0 bottom-0 z-40 lg:hidden`.
+
+   Todo eso lo hace ya `AppShell`.
+4. **`components/AccionesCabecera.tsx`:** el botón con estilos en línea pasa a ser `<AvatarButton size="md" aria-label="Menú de cuenta" className="lg:hidden"><Avatar initials="J" size="md" /></AvatarButton>` como disparador del `Menu`. En Vela 0.6.0, `AvatarButton` recibe el `Avatar` como hijo.
+5. **`NoticeCard` del bot en otra pestaña:** si Vela 0.6.0 trae `action.target`, el aviso sin `href` propio abre el bot con `target: "_blank"`.
+6. **Configuración (`app/(panel)/ajustes/page.tsx`):** el pie pasa del `<section className="card"><a>…` a `NoticeStrip` **sin `count`** («Para cambiar algo, díselo al bot» · «/ajustes») con `href` al bot.
+
+   `NoticeStrip` con `href` no lleva función, así que vale en una página de servidor. Si necesita `target="_blank"` y la franja no lo admite, para y apúntalo.
+7. **Inicio, «Todo al día»:** la línea de texto de `AvisosInicio` pasa a `NoticeStrip` sin `count`, sin `href` ni `onClick`.
+
+**Comprueba:**
+- `npm test`, `npm run typecheck`, `next build` y `next start` con todas las páginas en 200.
+- En el HTML de `/`: un solo `<main>`; ningún `style="display:flex"` ni `fixed inset-x-0` escritos en IVAn.
+- En la vista previa:
+  - en móvil (390 px), el final de cada página no queda tapado por las pestañas, y la «J» se ve igual y abre el menú;
+  - en escritorio, la barra sigue fija al hacer scroll y se contrae como antes;
+  - el pie de Configuración es una franja.
+
+## Fase B.2 · Inicio v2: bloque «Resultados» y «Por hacer» en tarjetas (24/11/2026)
+
+**Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Inicio v2»: `InicioEscritorio2` e `InicioMovil2`.
+
+**Empieza solo cuando se cumplan las dos cosas:**
+- la fase B.1 está fusionada en `wip/v0`;
+- Vela 0.7.0 está publicada.
+
+Rama nueva, `plan/rediseno-b2`, desde `wip/v0`. No se toca `lib/calculo.ts`.
+
+1. **`npm install @glinglo/vela-ds@0.7.0`.**
+2. **Cabecera de Inicio:** sin cambios de contenido. El avatar ya solo sale en móvil desde la B.1.
+   - **En escritorio**, el selector de año es lo único a la derecha.
+   - **En móvil**, el `Dropdown` del año va de ancho natural (`w-auto`), no a media cabecera. Si el `Dropdown` de Vela no lo permite con `className`, para y apúntalo.
+3. **Separación y franja:** 24 px entre la cabecera y lo siguiente (`gap-6` en el contenedor de Inicio). La franja ya trae el relleno nuevo con Vela 0.7.0.
+4. **Bloque «Resultados»:** una sola `Card` (relleno `p-4 lg:p-6`, `gap-5`) que sustituye a las tarjetas sueltas de rendimiento, cascada y barras:
+   - **Cabecera:** `CardHeader` con el título «Resultados» y el subtítulo del periodo («Acumulado de enero a hoy», «Acumulado de enero al 30/09» o «Año 2025 completo»). En `actions` va `Periodo`, en escritorio.
+     - **El selector:** `SegmentedControl variant="contrast"`, con `fullWidth={false}` en escritorio y `true` en móvil.
+     - **En móvil** el selector va debajo del título, a todo el ancho. `Periodo` recibe una prop o se pinta dos veces con `lg:hidden` / `hidden lg:block`, lo que quede más limpio.
+     - **Los trimestres futuros** salen **desactivados** (`disabled`), no ocultos. Así se cumple el plan original de la fase B.
+     - **El subtítulo de la página** (`PageHeader`) pasa a «Tus resultados de {año}» a secas, porque el detalle del periodo ya va en el bloque.
+   - **Separador** (`h-px bg-separator`).
+   - **Rendimiento y cascada:** en escritorio, dos columnas (`lg:flex-row`, rendimiento ~1/3 y cascada ~2/3) con una línea vertical entre ellas. En móvil, una debajo de la otra, con un separador horizontal.
+     - **Rendimiento:**
+       - eyebrow «Rendimiento neto» (`h3`);
+       - la cifra en `text-display`;
+       - debajo, en `text-caption`, «Antes del IRPF de la Renta»;
+       - el `Badge` del margen **a su tamaño** (`self-start`);
+       - la frase «De cada 100 € que facturas, te quedan {margen}.» en `text-body`;
+       - «≈ X € al mes de media» en `text-caption`.
+     - **Cascada:** eyebrow «De lo facturado al rendimiento» y `Cascada`. Etiquetas largas en escritorio y cortas en móvil:
+       - «Cuota de autónomo»;
+       - «5 % difícil justificación» (corta: «5 % difícil justif.»).
+
+       Las etiquetas cortas salen de `cascada()` con un parámetro, o de un mapa en `Cascada.tsx`. El `Waterfall` de la 0.7.0 ya no corta.
+   - **Separador.**
+   - **Barras:**
+     - eyebrow «Ingresos y gastos por mes», con un botón de información (`aria-label="Cómo se calcula"`) que muestra en un `Tooltip` «Gastos = facturas + cuota. El 5 % y la amortización se calculan sobre el año.»;
+     - la leyenda de Vela («Ingresos» y «Gastos y cuota»);
+     - `formatValue` de euros y `pendingLabel="sin facturar"`;
+     - **Con un trimestre elegido**, `highlight` con los índices de sus tres meses: el trimestre en lila y los anteriores apagados. Con «Año», sin `highlight`.
+     - **Solo en móvil, la fila de detalle:** al tocar un mes (`onSelect`), debajo del gráfico sale «{Mes} · Ingresos X € · Gastos Y €». Por defecto, el último mes con datos. En escritorio, el tooltip de Vela.
+     - **Nota en `text-caption`:** «{Mes} aún sin facturar.» si hay mes pendiente, más «Toca un mes para ver sus cifras.» en móvil o «Pasa el ratón por un mes para ver sus cifras.» en escritorio.
+5. **Escritorio: dos columnas.**
+   - **Ancho:** el `main` pasa de `lg:max-w-5xl` a `lg:max-w-7xl` (1280 px), en `mainClassName` del `AppShell`.
+   - **Contenido de Inicio:** `lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start`.
+     - **Izquierda:** el bloque «Resultados».
+     - **Derecha:** un `aside` con `aria-label="Por hacer y más detalle"`, `lg:sticky lg:top-8` y `flex flex-col gap-4`.
+   - **«Por hacer» en tarjetas**, solo en escritorio (`hidden lg:flex`):
+     - **La primera tarea:** `NoticeCard` grande, y la variante sale de su nivel: `urgente` → `urgent`, `pendiente` → `pending`, `info` → `brand`.
+       - eyebrow «Por hacer · 1 de N · {estado}»;
+       - título y detalle;
+       - la acción con su `href`, o «Abrir el bot» con `target: "_blank"`;
+       - la X para ocultarla, con la misma cookie de la fase B.
+     - **El resto:** `NoticeCard size="sm"`, cada una con su color de nivel, eyebrow «{i} de N · {cuándo}», título, detalle y enlace (su `href`, o el bot con `target: "_blank"`).
+     - **Si se oculta la primera,** pasa a ser una compacta más al principio, igual que en móvil.
+     - **Sin tareas:** una `NoticeCard size="sm"` `brand` «Todo al día», sin enlace. Si Vela la exige con `href`, una línea de texto `text-tertiary`.
+   - **En móvil,** `AvisosInicio` sigue igual: franja y drawer, o tarjeta grande si es urgente o desde el día 28. Se oculta en escritorio con `lg:hidden`.
+   - **«Más detalle»**, en la columna derecha en escritorio y al final en móvil, con una línea de pista en cada fila:
+     - **«Impuestos»:** «{N}T pendiente · del {apertura} al {fin}» si hay un plazo sin presentar, o «Todo presentado».
+     - **«En qué se van los gastos»:** «{gastos con factura} € este año».
+
+     Los datos salen de lo que ya calcula la página. No se inventa nada: si un dato no está, la fila va sin pista.
+6. **Textos de las tareas** (`lib/libro.ts`, con sus tests):
+   - **El plazo sin abrir** pasa de «Próximo trimestral: 4T 2026» a:
+     - texto «Presentar el 4T de 2026»;
+     - detalle «Del 01/01 al 30/01».
+   - **El plazo abierto** queda igual.
+   - **Nuevo campo opcional `dias?: number` en `Paso`:** los días hasta el inicio del plazo (sin abrir) o hasta el final (abierto). Sirve para «En 38 días» o «Quedan 6 días» en el eyebrow y en el badge del drawer, en vez de deducirlo del texto.
+   - **«N gasto(s) sin confirmar»** pasa a «1 gasto sin confirmar» o «N gastos sin confirmar», con su plural bien puesto.
+7. **Carga al cambiar de periodo** (y de año): `Periodo` usa `useTransition`. Mientras `isPending`, el bloque «Resultados» va con `opacity-60` y `aria-busy="true"`. Como el bloque es de servidor, el estado se comparte con un componente de cliente pequeño (`components/BloqueResultados.tsx`) que envuelve el contenido y recibe `isPending` por contexto desde `Periodo`. Si se complica, basta con atenuar el propio selector y apuntarlo.
+
+**Comprueba:**
+- `npm test` (incluidos los textos nuevos de `siguientesPasos` y `dias`), `npm run typecheck`, `next build` y `next start` con todas las páginas en 200: `/`, `/?periodo=3`, `/?anio=2025` y `/?anio=2025&periodo=4`.
+- En el HTML de `/`: un solo `h1`; «Resultados» como `h2`; ningún `role="tooltip"`.
+- **Vista previa**, comparando con el lienzo:
+  - **a 1440 px:** dos columnas; «Por hacer» en tarjetas fija al bajar; el selector a la derecha del título del bloque; al pasar el ratón por un mes, el tooltip con sus cifras; con 3T, los meses de julio a septiembre destacados;
+  - **a 390 px:** la franja con aire; el bloque «Resultados» con el selector a todo el ancho; al tocar un mes, la fila de detalle; sin avatar en escritorio ni columna derecha en móvil;
+  - **al cambiar de periodo,** el bloque se atenúa mientras carga.
 
 ## Fase C · Ventas y Gastos
 

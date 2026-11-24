@@ -2,7 +2,8 @@
 
 import { db, getAjustes, nums, type Ajustes } from "./db";
 import { modelo130, modelo303, modelo349, pyg, type DatosCalc, type FacturaCalc, type GastoCalc } from "./calculo";
-import { diasEntre, hoyMadrid, plazoTrimestral, trimestreDe, type Plazo } from "./fiscal";
+import { diasEntre, hoyMadrid, nombreMes, plazoTrimestral, trimestreDe, type Plazo } from "./fiscal";
+import { modoParalelo } from "./externas";
 
 export interface FacturaLista {
   id: string;
@@ -202,12 +203,22 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
   const actual = new Set(todas.filter((f) => f.fecha.startsWith(mes)).map((f) => f.cliente));
   const sinFacturar = [...pasado].filter((x) => !actual.has(x));
   if (sinFacturar.length) {
-    pasos.push({
-      nivel: Number(c.hoy.slice(8)) >= 25 ? "pendiente" : "info",
-      clave: "facturar",
-      texto: `Facturar este mes a ${sinFacturar.join(", ")}`,
-      detalle: "En el bot: «factura a … por …»",
-    });
+    const nivel = Number(c.hoy.slice(8)) >= 25 ? "pendiente" : "info";
+    if (modoParalelo(c.libro.ajustes, c.hoy)) {
+      pasos.push({
+        nivel,
+        clave: "facturar",
+        texto: `Registrar la factura de ${nombreMes(c.hoy)} de ${sinFacturar.join(", ")}`,
+        detalle: "La emite Selfconta: mándale el PDF al bot",
+      });
+    } else {
+      pasos.push({
+        nivel,
+        clave: "facturar",
+        texto: `Facturar este mes a ${sinFacturar.join(", ")}`,
+        detalle: "En el bot: «factura a … por …»",
+      });
+    }
   }
 
   if (!c.libro.ajustes.iban) pasos.push({ nivel: "pendiente", clave: "iban", texto: "Falta tu IBAN para las facturas" });

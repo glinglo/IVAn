@@ -1,98 +1,107 @@
-import Link from "next/link";
-import { PageHeader } from "@glinglo/vela-ds";
-import { contextoPasos, cargarLibro, pygHasta, resumenTrimestre, siguientesPasos } from "@/lib/libro";
-import { euros, hoyMadrid, trimestreDe } from "@/lib/fiscal";
-import { Fila } from "@/components/Filas";
+import { cookies } from "next/headers";
+import { Badge, Card, ListGroup, ListItem, PageHeader } from "@glinglo/vela-ds";
+import { contextoPasos, cargarLibro, pygHasta, siguientesPasos } from "@/lib/libro";
+import { cascada, clasificarAvisos, salud, seriesMensuales } from "@/lib/inicio";
+import { euros, hoyMadrid, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
+import { AvisosInicio } from "@/components/AvisosInicio";
+import { Periodo } from "@/components/Periodo";
+import { Cascada } from "@/components/Cascada";
+import { Barras } from "@/components/Barras";
 
-export default async function Inicio({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
+export default async function Inicio({ searchParams }: { searchParams: Promise<{ anio?: string; periodo?: string }> }) {
   const hoy = hoyMadrid();
   const anioActual = Number(hoy.slice(0, 4));
-  const anio = Number((await searchParams).anio ?? anioActual);
+  const sp = await searchParams;
+  const anio = Number(sp.anio ?? anioActual);
+  const periodo = sp.periodo && ["1", "2", "3", "4"].includes(sp.periodo) ? Number(sp.periodo) : null;
+
   const ctx = await contextoPasos(hoy);
   const libro = anio === anioActual ? ctx.libro : await cargarLibro(anio);
-  const hasta = anio === anioActual ? hoy : `${anio}-12-31`;
+
+  const anioCerrado = anio !== anioActual;
+  const tHoy = trimestreDe(hoy).t;
+  const trimestreEnCurso = periodo !== null && !anioCerrado && periodo === tHoy;
+  const hasta =
+    periodo === null
+      ? anioCerrado
+        ? `${anio}-12-31`
+        : hoy
+      : trimestreEnCurso
+        ? hoy
+        : anio === anioActual
+          ? (rangoTrimestre(anio, periodo).hasta < hoy ? rangoTrimestre(anio, periodo).hasta : hoy)
+          : rangoTrimestre(anio, periodo).hasta;
+
   const p = pygHasta(libro, hasta);
   const pasos = siguientesPasos(ctx);
-  const tActual = anio === anioActual ? trimestreDe(hoy).t : 4;
-  const trimestres = [1, 2, 3, 4].map((t) => ({ t, ...resumenTrimestre(libro, t) }));
-  const gastosTotales = p.gastosFacturas + p.seguridadSocial + p.amortizaciones;
+  const { destacado, resto } = clasificarAvisos(pasos, hoy);
+
+  const cookieStore = await cookies();
+  const ocultaCookie = cookieStore.get("ivan_aviso_oculto")?.value;
+  const ocultoHoy = !!destacado && ocultaCookie === `${destacado.clave}:${hoy}`;
+
+  const disponibles = anioCerrado ? [1, 2, 3, 4] : Array.from({ length: tHoy }, (_, i) => i + 1);
+
+  const subtitulo =
+    periodo === null
+      ? anioCerrado
+        ? `Tus resultados de ${anio} (año cerrado)`
+        : `Tus resultados de ${anio}, hasta hoy`
+      : `Acumulado hasta el ${hasta.split("-").reverse().join("/")}`;
+
+  const serie = seriesMensuales(libro, hasta, hoy);
+  const filasCascada = cascada(p);
+  const indicadores = salud(libro, p);
+  const margen = indicadores.find((i) => i.clave === "margen")!;
+  const mesesTranscurridos = serie.length || 1;
+  const porMes = Math.round(p.rendimientoNeto / mesesTranscurridos);
 
   return (
     <>
       <PageHeader
         title="Hola, Jose"
-        subtitle={anio === anioActual ? `Tus resultados de ${anio}, hasta hoy` : `Tus resultados de ${anio} (año cerrado)`}
+        subtitle={subtitulo}
         actions={<AccionesCabecera anio={anio} anioActual={anioActual} />}
       />
 
-      <div className="kpis">
-        <div className="kpi">
-          <div className="etq">Ventas</div>
-          <div className="valor">{euros(p.ingresos).replace(",00 €", " €")}</div>
+      <div className="flex flex-col lg:gap-4 gap-4">
+        <AvisosInicio destacado={destacado} resto={resto} ocultoHoy={ocultoHoy} hoy={hoy} />
+
+        <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
+
+        <div className="flex flex-wrap gap-4">
+          <Card className="basis-full lg:basis-1/3 grow">
+            <h2 className="text-eyebrow text-tertiary">Rendimiento neto</h2>
+            <div className="text-display">{euros(p.rendimientoNeto).replace(/,\d\d €/, " €")}</div>
+            {margen.valor !== null && (
+              <Badge type={margen.estado === "bien" ? "success" : "onhold"}>Margen {Math.round(margen.valor * 100)} %</Badge>
+            )}
+            <div className="text-tertiary">≈ {euros(porMes).replace(/,\d\d €/, " €")} al mes</div>
+          </Card>
+
+          <Card className="basis-full lg:basis-[calc(2/3*100%-1rem)] grow">
+            <h2 className="text-eyebrow text-tertiary">De lo facturado al rendimiento</h2>
+            <Cascada filas={filasCascada} />
+          </Card>
         </div>
-        <div className="kpi">
-          <div className="etq">Gastos</div>
-          <div className="valor">{euros(gastosTotales).replace(/,\d\d €/, " €")}</div>
-        </div>
-        <div className="kpi">
-          <div className="etq">Beneficio</div>
-          <div className="valor">{euros(p.rendimientoNeto).replace(/,\d\d €/, " €")}</div>
+
+        <div className="flex flex-wrap gap-4">
+          <Card className="basis-full lg:basis-[calc(2/3*100%-1rem)] grow">
+            <h2 className="text-eyebrow text-tertiary">Ingresos y gastos por mes</h2>
+            <Barras serie={serie} />
+            <p className="text-tertiary">El 5 % y la amortización se calculan sobre el año</p>
+          </Card>
+
+          <Card className="basis-full lg:basis-1/3 grow">
+            <h2 className="text-eyebrow text-tertiary">Más detalle</h2>
+            <ListGroup>
+              <ListItem title="Impuestos" href={`/impuestos?anio=${anio}`} chevron />
+              <ListItem title="En qué se van los gastos" href={`/gastos?anio=${anio}`} chevron />
+            </ListGroup>
+          </Card>
         </div>
       </div>
-
-      {pasos.length > 0 && (
-        <section className="card">
-          <h2>Siguientes pasos</h2>
-          {pasos.map((x, i) => (
-            <div key={i} className={`paso ${x.nivel}`}>
-              <span className="punto" />
-              <div>
-                <div>{x.href ? <Link href={x.href}>{x.texto}</Link> : x.texto}</div>
-                {x.detalle && <div className="det">{x.detalle}</div>}
-              </div>
-            </div>
-          ))}
-        </section>
-      )}
-
-      <section className="card">
-        <h2>Pérdidas y ganancias</h2>
-        <div className="filas">
-          <Fila tit="Ingresos" imp={p.ingresos} />
-          <Fila tit="Gastos con factura" imp={-p.gastosFacturas} clase="sangria" />
-          <Fila tit="Cuota de autónomo" imp={-p.seguridadSocial} clase="sangria" />
-          <Fila tit="Amortizaciones" imp={-p.amortizaciones} clase="sangria" />
-          <Fila tit="Gastos de difícil justificación (5 %)" imp={-p.dificilJustificacion} clase="sangria" />
-          <Fila tit="Rendimiento neto" imp={p.rendimientoNeto} clase="total" />
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>Trimestres</h2>
-        <div className="filas">
-          {trimestres
-            .filter((x) => x.t <= tActual)
-            .map((x) => {
-              const hecho = x.presentado("303") && x.presentado("130");
-              return (
-                <Link key={x.t} href={`/impuestos/${anio}/${x.t}`} className="fila">
-                  <div className="izq">
-                    <div className="tit">
-                      {x.t}T {hecho ? <span className="badge ok">presentado</span> : x.t === tActual && anio === anioActual ? <span className="badge">en curso</span> : <span className="badge warn">pendiente</span>}
-                    </div>
-                    <div className="det">
-                      IVA {euros(x.m303.c71)} · IRPF {euros(x.m130.aIngresar)}
-                    </div>
-                  </div>
-                  <div className="imp">›</div>
-                </Link>
-              );
-            })}
-        </div>
-      </section>
-
-      <a className="boton" href={`/api/exportar?anio=${anio}`}>Descargar Excel {anio}</a>
     </>
   );
 }
