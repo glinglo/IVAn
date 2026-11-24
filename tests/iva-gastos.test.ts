@@ -24,6 +24,7 @@ const extraido = (p: Partial<GastoExtraido>): GastoExtraido => ({
   fecha: "2026-11-10",
   concepto: "gasto",
   categoria: "otro",
+  categoria_gasto: "otros",
   moneda: "EUR",
   base: 0,
   iva: 0,

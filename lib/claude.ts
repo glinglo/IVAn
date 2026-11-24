@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { env } from "./env";
+import { CATEGORIAS_GASTO } from "./categorias";
 
 let anthropic: Anthropic | null = null;
 export const ai = () => (anthropic ??= new Anthropic());
@@ -55,6 +56,7 @@ export const GastoExtraido = z.object({
   fecha: z.string().nullable(),
   concepto: z.string().nullable(),
   categoria: z.enum(["restauracion", "otro"]),
+  categoria_gasto: z.enum(CATEGORIAS_GASTO),
   moneda: z.string(),
   base: z.number().nullable(),
   iva: z.number(),
@@ -86,6 +88,11 @@ const esquemaGasto = {
       type: "string",
       enum: ["restauracion", "otro"],
       description: "'restauracion' si es un restaurante, bar u hostelería (un ticket de comida, cena, hotel con manutención…); 'otro' en cualquier otro caso",
+    },
+    categoria_gasto: {
+      type: "string",
+      enum: [...CATEGORIAS_GASTO],
+      description: "Categoría del gasto según lo que se compra",
     },
     moneda: { type: "string", description: "ISO 4217 (EUR, USD…)" },
     base: { type: ["number", "null"], description: "Base imponible (sin impuestos) en la moneda de la factura" },

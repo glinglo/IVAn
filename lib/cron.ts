@@ -2,6 +2,7 @@ import { db, getAjustes } from "./db";
 import { modoParalelo } from "./externas";
 import { euros, hoyMadrid, mesAnterior, nombreMes, rangoTrimestre, sumarDias } from "./fiscal";
 import { avisosDeHoy, proveedoresQueFaltan, type Aviso, type GastoProveedor } from "./recordatorios";
+import { nombreCorto } from "./texto";
 
 const MAX_PROVEEDORES_EN_LISTA = 12;
 
@@ -23,10 +24,12 @@ async function resumenTrimestre(anio: number, t: number): Promise<string> {
   );
 }
 
-const lista = (nombres: string[]) =>
-  nombres.length > MAX_PROVEEDORES_EN_LISTA
-    ? `${nombres.slice(0, MAX_PROVEEDORES_EN_LISTA).join(", ")} y ${nombres.length - MAX_PROVEEDORES_EN_LISTA} más`
-    : nombres.join(", ");
+const lista = (nombres: string[]) => {
+  const cortos = nombres.map(nombreCorto);
+  return cortos.length > MAX_PROVEEDORES_EN_LISTA
+    ? `${cortos.slice(0, MAX_PROVEEDORES_EN_LISTA).join(", ")} y ${cortos.length - MAX_PROVEEDORES_EN_LISTA} más`
+    : cortos.join(", ");
+};
 
 /** Texto del aviso de fin de mes: factura (según el modo) y los gastos que suelen llegar cada mes. */
 async function textoFinDeMes(hoy: string, paralelo: boolean): Promise<string> {

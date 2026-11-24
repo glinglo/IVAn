@@ -170,7 +170,9 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
             <div className="h-px bg-separator" />
 
             <h2 className="text-eyebrow text-tertiary">Más detalle</h2>
-            <ul className="flex flex-col gap-2">
+            {/* -mt-3 compensa el py-3 interno de ListItem (fijo en Vela, sin className propio): así el
+                hueco hasta la primera fila queda igual que el de "Por hacer" a su primera tarea. */}
+            <ul className="flex flex-col gap-2 -mt-3">
               <li>
                 <ListItem title="Impuestos" description={impuestosPista} href={`/impuestos?anio=${anio}`} chevron />
               </li>

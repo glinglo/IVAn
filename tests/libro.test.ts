@@ -59,9 +59,11 @@ describe("siguientesPasos: clave de cada paso", () => {
           base: 1000,
           iva_pct: 21,
           iva: 210,
+          retencion_pct: 0,
           retencion: 0,
           total: 1210,
           tipo: "nacional",
+          origen: "ivan",
           pdf_path: null,
         },
       ],
@@ -87,9 +89,11 @@ describe("siguientesPasos: clave de cada paso", () => {
           base: 1000,
           iva_pct: 21,
           iva: 210,
+          retencion_pct: 0,
           retencion: 0,
           total: 1210,
           tipo: "nacional",
+          origen: "ivan",
           pdf_path: null,
         },
       ],
@@ -169,5 +173,12 @@ describe("siguientesPasos: clave de cada paso", () => {
   it("1 gasto sin confirmar (singular) y 2 gastos sin confirmar (plural)", () => {
     expect(siguientesPasos(ctx({ gastosPorConfirmar: 1 })).find((p) => p.clave === "gastos")?.texto).toBe("1 gasto sin confirmar");
     expect(siguientesPasos(ctx({ gastosPorConfirmar: 2 })).find((p) => p.clave === "gastos")?.texto).toBe("2 gastos sin confirmar");
+  });
+
+  it("cuandoPaso: 'Este mes' para facturar sin días, y null para otros pasos sin días", () => {
+    expect(cuandoPaso({ nivel: "info", clave: "facturar", texto: "x" })).toBe("Este mes");
+    expect(cuandoPaso({ nivel: "pendiente", clave: "facturar", texto: "x" })).toBe("Este mes");
+    expect(cuandoPaso({ nivel: "info", clave: "mac", texto: "x" })).toBe(null);
+    expect(cuandoPaso({ nivel: "pendiente", clave: "gastos", texto: "x" })).toBe(null);
   });
 });

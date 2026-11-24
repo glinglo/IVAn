@@ -54,7 +54,7 @@ describe("llamar(): respuesta cortada por max_tokens", () => {
           type: "text",
           text: JSON.stringify({
             es_factura: false, proveedor: null, nif_proveedor: null, pais: null, numero_factura: null,
-            fecha: null, concepto: null, categoria: "otro", moneda: "EUR", base: null, iva: 0, total: null,
+            fecha: null, concepto: null, categoria: "otro", categoria_gasto: "otros", moneda: "EUR", base: null, iva: 0, total: null,
             desglose_iva: [], iva_espanol: false, nif_destinatario: null, notas: null,
           }),
         },
