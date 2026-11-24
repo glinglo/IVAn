@@ -851,6 +851,35 @@ Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@
 - **Comprobación con `next start` + `curl`** (cookie de sesión, con la migración 007 **sin aplicar** en el Supabase de `.env.local`): `/`, `/gastos`, `/gastos?periodo=3`, `/gastos?categoria=software_ia` e `/impuestos` dan `200`; **`/ventas` y `/ventas?periodo=3` dan `500`** («column presentaciones.ingresos_acumulados does not exist»), porque `cargarHistoricoIngresos()` ya pide esa columna — el mismo patrón que la migración 006 sin aplicar en la fase C. Pendiente de que Jose aplique `007_ingresos_historicos.sql` (y, si quiere los datos históricos ya, `scripts/historico-ingresos.sql`) en el SQL Editor de Supabase; tras eso, repetir la comprobación de `/ventas`.
 - **Prueba de integración de las 56 conversaciones:** sí se ha podido ejecutar en este entorno (hay Postgres y PostgREST locales) — `reset-db.sh` aplica también la migración 007 a la base de pruebas, así que ahí **sí** tiene la columna. Las 56 pasan.
 
+## Fase C.3 · Retoques tras la revisión de la C.2 (24/11/2026)
+
+**Aprobado por Jose el 24/11/2026**, tras ver la vista previa de la C.2. En la misma rama `plan/rediseno-c2` y el mismo PR #19.
+
+**Las dos páginas**
+1. **Aire bajo la cabecera, como en Inicio:** contenedor `flex flex-col gap-8` entre `PageHeader` y el contenido. `PageHeader` con subtítulo «Lo que has facturado en {año}» / «En qué se va el dinero en {año}».
+2. **Subtítulo de la tarjeta principal = el periodo**, como «Resultados» de Inicio: «Acumulado de enero a hoy», «2T · de abril a junio»… (hoy dice «Ventas de 2026» / «Gastos de 2026», que repite la cabecera).
+3. **Espacios de no separación** en todo texto hecho a mano con «%» o «€» (`70 %`, `20 %`, «De cada 100 €…»): hoy «70 %» se parte en dos líneas en la tarjeta de dependencia. Si hay más de dos sitios, una ayuda `pct(n)` junto a `euros()`.
+4. **La franja «Para facturar o corregir una factura, díselo al bot»** se corta en la columna derecha: va al final de la columna izquierda (escritorio) y al final de la página (móvil), a todo el ancho.
+
+**Ventas**
+5. **Media al mes sobre los meses ya facturados:** hoy divide entre 11 (con noviembre, sin factura) y da 2.678 €; tiene que ser 29.460 / 10 = 2.946 €. Meses con alguna factura del periodo, o meses cerrados si no hay ninguna en el mes en curso.
+6. **El `Badge` de la comparativa:** «26 % menos que en 2025 de enero a septiembre» (sin el «−» delante, que con «menos» es doble negativo); al subir, «12 % más que…». Signo con el valor absoluto.
+7. **«Próxima factura»:** el mes con mayúscula («Noviembre · Zapflow Oy»); debajo del importe, el texto del modo (en paralelo: «La emite Selfconta: mándale el PDF al bot»), que hoy no sale; y el botón «Abrir el bot» en el estilo principal (oscuro), como en el dibujo.
+8. **La barra del mes pendiente** lleva su valor como estimación: «≈ 3.060 €», para que no parezca facturado.
+9. **Clientes:** el tipo como en la tabla y el dibujo: «ES · 21 % · −15 % · 3 %» en vez de «Nacional».
+
+**Gastos**
+10. **El gráfico de la tarjeta principal pasa a una sola serie: el total por mes** (como Ventas: mismo color de marca, `showValues`, mes en curso `pending` si no tiene gastos). Motivo: con 9 categorías la leyenda se monta sobre los valores y no se lee, y el «dónde» ya lo cuenta «Por categoría», que se queda tal cual (a Jose le encanta). Nada de donut: repite «Por categoría» y se lee peor que las barras.
+11. **«Lo que ha cambiado» se quita como sección** (hoy solo dice «Sube» sin cifras y deja un hueco grande debajo). Lo útil pasa dentro de «Tus suscripciones»: en cada suscripción cuyo coste cambie (la regla de `cambiosGastos`), una pista corta bajo el nombre: «↑ antes 17 €» / «↓ antes 90 €».
+12. **«Tus suscripciones» solo con las que siguen vivas:** activa = recurrente (2 de los 3 meses anteriores) **y** con gasto en el último mes cerrado. Hoy Apify sale activa (25 €) aunque no cobró en octubre.
+    - La que era recurrente y no tiene gasto en el último mes cerrado sale como una fila gris al final: «Apify · sin factura en octubre» (sin importe). Así sirve de aviso de fin de mes.
+    - **Fuera la lista «Sin factura desde…»:** mezcla bajas de hace meses con gastos que no son suscripciones (Meta Ads, ionos) y no ayuda a decidir nada.
+    - Con los datos de hoy: Anthropic 90 € y Cursor 71 € → «≈ 161 € al mes · 2 suscripciones activas · ≈ 1.932 € al año», más la fila gris de Apify.
+13. **El `Badge` del porcentaje con un decimal:** «7,6 % de lo que facturas» (hoy «8 %»).
+14. **Tests:** actualiza los de `suscripciones` (Apify sin gasto en el último mes ya no es activa) y quita los de `cambiosGastos` que dejen de usarse (si la función se queda solo para la pista del punto 11, sus tests siguen).
+
+**Comprueba:** `npm test`, `typecheck`, `build`, `curl` con cookie a `/ventas`, `/ventas?periodo=3`, `/gastos`, `/gastos?periodo=3` en `200`; integración solo si cambia algo que use el bot. En la vista previa: Ventas «≈ 2.946 € al mes de media» y «26 % menos…»; Gastos con barras de una serie sin solapes, suscripciones «≈ 161 € al mes» con la pista de Cursor y la fila de Apify, y ningún hueco grande en la columna izquierda.
+
 ## Fase D · Impuestos
 
 **`/impuestos`:**
