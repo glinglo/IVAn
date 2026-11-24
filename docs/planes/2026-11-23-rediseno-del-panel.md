@@ -490,6 +490,86 @@ Va en una rama nueva, `plan/rediseno-b1`, desde `wip/v0`. Así no choca con la B
   - en escritorio, la barra sigue fija al hacer scroll y se contrae como antes;
   - el pie de Configuración es una franja.
 
+## Fase B.2 · Inicio v2: bloque «Resultados» y «Por hacer» en tarjetas (24/11/2026)
+
+**Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Inicio v2»: `InicioEscritorio2` e `InicioMovil2`.
+
+**Empieza solo cuando se cumplan las dos cosas:**
+- la fase B.1 está fusionada en `wip/v0`;
+- Vela 0.7.0 está publicada.
+
+Rama nueva, `plan/rediseno-b2`, desde `wip/v0`. No se toca `lib/calculo.ts`.
+
+1. **`npm install @glinglo/vela-ds@0.7.0`.**
+2. **Cabecera de Inicio:** sin cambios de contenido. El avatar ya solo sale en móvil desde la B.1.
+   - **En escritorio**, el selector de año es lo único a la derecha.
+   - **En móvil**, el `Dropdown` del año va de ancho natural (`w-auto`), no a media cabecera. Si el `Dropdown` de Vela no lo permite con `className`, para y apúntalo.
+3. **Separación y franja:** 24 px entre la cabecera y lo siguiente (`gap-6` en el contenedor de Inicio). La franja ya trae el relleno nuevo con Vela 0.7.0.
+4. **Bloque «Resultados»:** una sola `Card` (relleno `p-4 lg:p-6`, `gap-5`) que sustituye a las tarjetas sueltas de rendimiento, cascada y barras:
+   - **Cabecera:** `CardHeader` con el título «Resultados» y el subtítulo del periodo («Acumulado de enero a hoy», «Acumulado de enero al 30/09» o «Año 2025 completo»). En `actions` va `Periodo`, en escritorio.
+     - **El selector:** `SegmentedControl variant="contrast"`, con `fullWidth={false}` en escritorio y `true` en móvil.
+     - **En móvil** el selector va debajo del título, a todo el ancho. `Periodo` recibe una prop o se pinta dos veces con `lg:hidden` / `hidden lg:block`, lo que quede más limpio.
+     - **Los trimestres futuros** salen **desactivados** (`disabled`), no ocultos. Así se cumple el plan original de la fase B.
+     - **El subtítulo de la página** (`PageHeader`) pasa a «Tus resultados de {año}» a secas, porque el detalle del periodo ya va en el bloque.
+   - **Separador** (`h-px bg-separator`).
+   - **Rendimiento y cascada:** en escritorio, dos columnas (`lg:flex-row`, rendimiento ~1/3 y cascada ~2/3) con una línea vertical entre ellas. En móvil, una debajo de la otra, con un separador horizontal.
+     - **Rendimiento:**
+       - eyebrow «Rendimiento neto» (`h3`);
+       - la cifra en `text-display`;
+       - debajo, en `text-caption`, «Antes del IRPF de la Renta»;
+       - el `Badge` del margen **a su tamaño** (`self-start`);
+       - la frase «De cada 100 € que facturas, te quedan {margen}.» en `text-body`;
+       - «≈ X € al mes de media» en `text-caption`.
+     - **Cascada:** eyebrow «De lo facturado al rendimiento» y `Cascada`. Etiquetas largas en escritorio y cortas en móvil:
+       - «Cuota de autónomo»;
+       - «5 % difícil justificación» (corta: «5 % difícil justif.»).
+
+       Las etiquetas cortas salen de `cascada()` con un parámetro, o de un mapa en `Cascada.tsx`. El `Waterfall` de la 0.7.0 ya no corta.
+   - **Separador.**
+   - **Barras:**
+     - eyebrow «Ingresos y gastos por mes», con un botón de información (`aria-label="Cómo se calcula"`) que muestra en un `Tooltip` «Gastos = facturas + cuota. El 5 % y la amortización se calculan sobre el año.»;
+     - la leyenda de Vela («Ingresos» y «Gastos y cuota»);
+     - `formatValue` de euros y `pendingLabel="sin facturar"`;
+     - **Con un trimestre elegido**, `highlight` con los índices de sus tres meses: el trimestre en lila y los anteriores apagados. Con «Año», sin `highlight`.
+     - **Solo en móvil, la fila de detalle:** al tocar un mes (`onSelect`), debajo del gráfico sale «{Mes} · Ingresos X € · Gastos Y €». Por defecto, el último mes con datos. En escritorio, el tooltip de Vela.
+     - **Nota en `text-caption`:** «{Mes} aún sin facturar.» si hay mes pendiente, más «Toca un mes para ver sus cifras.» en móvil o «Pasa el ratón por un mes para ver sus cifras.» en escritorio.
+5. **Escritorio: dos columnas.**
+   - **Ancho:** el `main` pasa de `lg:max-w-5xl` a `lg:max-w-7xl` (1280 px), en `mainClassName` del `AppShell`.
+   - **Contenido de Inicio:** `lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start`.
+     - **Izquierda:** el bloque «Resultados».
+     - **Derecha:** un `aside` con `aria-label="Por hacer y más detalle"`, `lg:sticky lg:top-8` y `flex flex-col gap-4`.
+   - **«Por hacer» en tarjetas**, solo en escritorio (`hidden lg:flex`):
+     - **La primera tarea:** `NoticeCard` grande, y la variante sale de su nivel: `urgente` → `urgent`, `pendiente` → `pending`, `info` → `brand`.
+       - eyebrow «Por hacer · 1 de N · {estado}»;
+       - título y detalle;
+       - la acción con su `href`, o «Abrir el bot» con `target: "_blank"`;
+       - la X para ocultarla, con la misma cookie de la fase B.
+     - **El resto:** `NoticeCard size="sm"`, cada una con su color de nivel, eyebrow «{i} de N · {cuándo}», título, detalle y enlace (su `href`, o el bot con `target: "_blank"`).
+     - **Si se oculta la primera,** pasa a ser una compacta más al principio, igual que en móvil.
+     - **Sin tareas:** una `NoticeCard size="sm"` `brand` «Todo al día», sin enlace. Si Vela la exige con `href`, una línea de texto `text-tertiary`.
+   - **En móvil,** `AvisosInicio` sigue igual: franja y drawer, o tarjeta grande si es urgente o desde el día 28. Se oculta en escritorio con `lg:hidden`.
+   - **«Más detalle»**, en la columna derecha en escritorio y al final en móvil, con una línea de pista en cada fila:
+     - **«Impuestos»:** «{N}T pendiente · del {apertura} al {fin}» si hay un plazo sin presentar, o «Todo presentado».
+     - **«En qué se van los gastos»:** «{gastos con factura} € este año».
+
+     Los datos salen de lo que ya calcula la página. No se inventa nada: si un dato no está, la fila va sin pista.
+6. **Textos de las tareas** (`lib/libro.ts`, con sus tests):
+   - **El plazo sin abrir** pasa de «Próximo trimestral: 4T 2026» a:
+     - texto «Presentar el 4T de 2026»;
+     - detalle «Del 01/01 al 30/01».
+   - **El plazo abierto** queda igual.
+   - **Nuevo campo opcional `dias?: number` en `Paso`:** los días hasta el inicio del plazo (sin abrir) o hasta el final (abierto). Sirve para «En 38 días» o «Quedan 6 días» en el eyebrow y en el badge del drawer, en vez de deducirlo del texto.
+   - **«N gasto(s) sin confirmar»** pasa a «1 gasto sin confirmar» o «N gastos sin confirmar», con su plural bien puesto.
+7. **Carga al cambiar de periodo** (y de año): `Periodo` usa `useTransition`. Mientras `isPending`, el bloque «Resultados» va con `opacity-60` y `aria-busy="true"`. Como el bloque es de servidor, el estado se comparte con un componente de cliente pequeño (`components/BloqueResultados.tsx`) que envuelve el contenido y recibe `isPending` por contexto desde `Periodo`. Si se complica, basta con atenuar el propio selector y apuntarlo.
+
+**Comprueba:**
+- `npm test` (incluidos los textos nuevos de `siguientesPasos` y `dias`), `npm run typecheck`, `next build` y `next start` con todas las páginas en 200: `/`, `/?periodo=3`, `/?anio=2025` y `/?anio=2025&periodo=4`.
+- En el HTML de `/`: un solo `h1`; «Resultados» como `h2`; ningún `role="tooltip"`.
+- **Vista previa**, comparando con el lienzo:
+  - **a 1440 px:** dos columnas; «Por hacer» en tarjetas fija al bajar; el selector a la derecha del título del bloque; al pasar el ratón por un mes, el tooltip con sus cifras; con 3T, los meses de julio a septiembre destacados;
+  - **a 390 px:** la franja con aire; el bloque «Resultados» con el selector a todo el ancho; al tocar un mes, la fila de detalle; sin avatar en escritorio ni columna derecha en móvil;
+  - **al cambiar de periodo,** el bloque se atenúa mientras carga.
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**
