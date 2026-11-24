@@ -77,6 +77,8 @@ export interface GastoProveedor {
   nif: string | null;
   fecha: string;
   estado: "borrador" | "confirmado" | "descartado";
+  /** Base + IVA. Solo lo usan `suscripciones` y `cambiosGastos`. */
+  importe?: number;
 }
 
 /** Sin mayúsculas, sin formas jurídicas (S.L., Inc., Ltd, B.V....) y sin espacios de más. */
@@ -95,6 +97,42 @@ function claveProveedor(g: { proveedor: string | null; nif: string | null }): st
   return n || null;
 }
 
+interface MesProveedor {
+  confirmado: boolean;
+  importe: number;
+}
+interface ResumenProveedor {
+  nombre: string;
+  porMes: Map<string, MesProveedor>;
+}
+
+/** Agrupa los gastos por proveedor (por `claveProveedor`), con un resumen por mes: si hay algún
+ * gasto confirmado ese mes y cuánto suma (solo los confirmados). Lo reutilizan `proveedoresQueFaltan`,
+ * `suscripciones` y `cambiosGastos`. */
+function agruparPorProveedor(gastos: GastoProveedor[]): Map<string, ResumenProveedor> {
+  const porProveedor = new Map<string, ResumenProveedor>();
+  for (const g of gastos) {
+    if (g.estado === "descartado") continue;
+    const clave = claveProveedor(g);
+    if (!clave) continue;
+    let e = porProveedor.get(clave);
+    if (!e) {
+      e = { nombre: g.proveedor ?? clave, porMes: new Map() };
+      porProveedor.set(clave, e);
+    }
+    const mes = g.fecha.slice(0, 7);
+    const confirmado = g.estado === "confirmado";
+    const importe = confirmado ? g.importe ?? 0 : 0;
+    const actual = e.porMes.get(mes);
+    if (!actual) e.porMes.set(mes, { confirmado, importe });
+    else {
+      actual.confirmado = actual.confirmado || confirmado;
+      actual.importe += importe;
+    }
+  }
+  return porProveedor;
+}
+
 /**
  * Proveedores que suelen llegar cada mes y de los que aún no hay factura del mes en curso, y los
  * que empezaron a llegar el mes pasado. Pura: recibe los gastos de los últimos 4 meses (el actual y
@@ -109,35 +147,108 @@ export function proveedoresQueFaltan(gastos: GastoProveedor[], hoy: string): { f
   const m1 = mesAnterior(mesActual);
   const m2 = mesAnterior(m1);
   const m3 = mesAnterior(m2);
-
-  const porProveedor = new Map<string, { nombre: string; confirmados: Set<string>; cualquiera: Set<string> }>();
-  for (const g of gastos) {
-    if (g.estado === "descartado") continue;
-    const clave = claveProveedor(g);
-    if (!clave) continue;
-    const mes = g.fecha.slice(0, 7);
-    let e = porProveedor.get(clave);
-    if (!e) {
-      e = { nombre: g.proveedor ?? clave, confirmados: new Set(), cualquiera: new Set() };
-      porProveedor.set(clave, e);
-    }
-    e.cualquiera.add(mes);
-    if (g.estado === "confirmado") e.confirmados.add(mes);
-  }
+  const porProveedor = agruparPorProveedor(gastos);
 
   const faltan: string[] = [];
   const nuevos: string[] = [];
   for (const e of porProveedor.values()) {
-    if (e.cualquiera.has(mesActual)) continue;
-    const mesesRecurrentes = [m1, m2, m3].filter((m) => e.confirmados.has(m)).length;
+    if (e.porMes.has(mesActual)) continue;
+    const confirmadoEn = (mes: string) => e.porMes.get(mes)?.confirmado ?? false;
+    const mesesRecurrentes = [m1, m2, m3].filter(confirmadoEn).length;
     if (mesesRecurrentes >= 2) {
       faltan.push(e.nombre);
-    } else if (e.confirmados.has(m1) && !e.confirmados.has(m2) && !e.confirmados.has(m3)) {
+    } else if (confirmadoEn(m1) && !confirmadoEn(m2) && !confirmadoEn(m3)) {
       nuevos.push(e.nombre);
     }
   }
   faltan.sort((a, b) => a.localeCompare(b));
   nuevos.sort((a, b) => a.localeCompare(b));
   return { faltan, nuevos };
+}
+
+// ---------- Suscripciones (Gastos v2) ----------
+
+export interface SuscripcionActiva {
+  nombre: string;
+  costeMes: number;
+}
+
+export interface Suscripciones {
+  activas: SuscripcionActiva[];
+  /** Hasta 3, la más reciente primero. */
+  sinFacturaDesde: { nombre: string; mes: string }[];
+}
+
+/**
+ * Mismo criterio de recurrencia que `proveedoresQueFaltan` (confirmado en 2 de los 3 meses
+ * anteriores a hoy). Activa: coste al mes = lo confirmado en el último mes con gasto (el actual si
+ * ya lo tiene, si no el más reciente de los 3 anteriores). «Sin factura desde…»: recurrente en
+ * algún momento del año (2 meses seguidos confirmados) y sin gasto en los 2 últimos meses.
+ */
+export function suscripciones(gastos: GastoProveedor[], hoy: string): Suscripciones {
+  const mesActual = hoy.slice(0, 7);
+  const m1 = mesAnterior(mesActual);
+  const m2 = mesAnterior(m1);
+  const m3 = mesAnterior(m2);
+  const porProveedor = agruparPorProveedor(gastos);
+
+  const activas: SuscripcionActiva[] = [];
+  const sinFacturaDesde: { nombre: string; mes: string }[] = [];
+
+  for (const e of porProveedor.values()) {
+    const confirmadoEn = (mes: string) => e.porMes.get(mes)?.confirmado ?? false;
+    const recurrenteReciente = [m1, m2, m3].filter(confirmadoEn).length >= 2;
+    const mesConGasto = [mesActual, m1, m2, m3].find(confirmadoEn);
+    if (recurrenteReciente && mesConGasto) {
+      activas.push({ nombre: e.nombre, costeMes: e.porMes.get(mesConGasto)!.importe });
+      continue;
+    }
+    const mesesConfirmados = [...e.porMes.entries()].filter(([, v]) => v.confirmado).map(([mes]) => mes).sort();
+    const dosSeguidos = mesesConfirmados.some((mes, i) => i > 0 && mesAnterior(mes) === mesesConfirmados[i - 1]);
+    if (dosSeguidos && !confirmadoEn(m1) && !confirmadoEn(m2)) {
+      sinFacturaDesde.push({ nombre: e.nombre, mes: mesesConfirmados[mesesConfirmados.length - 1] });
+    }
+  }
+  activas.sort((a, b) => b.costeMes - a.costeMes);
+  sinFacturaDesde.sort((a, b) => (a.mes < b.mes ? 1 : -1));
+  return { activas, sinFacturaDesde: sinFacturaDesde.slice(0, 3) };
+}
+
+export interface CambioGasto {
+  nombre: string;
+  tipo: "sube" | "baja" | "sin_factura";
+}
+
+/**
+ * Para cada suscripción activa (mismo criterio que `suscripciones`), compara el último mes cerrado
+ * con la media de los 3 anteriores: «sube»/«baja» si cambia al menos un 50 % y 10 €; «sin_factura»
+ * si no hay gasto confirmado en el último mes cerrado. Hasta 3.
+ */
+export function cambiosGastos(gastos: GastoProveedor[], hoy: string): CambioGasto[] {
+  const mesActual = hoy.slice(0, 7);
+  const m1 = mesAnterior(mesActual);
+  const m2 = mesAnterior(m1);
+  const m3 = mesAnterior(m2);
+  const m4 = mesAnterior(m3);
+  const porProveedor = agruparPorProveedor(gastos);
+
+  const cambios: CambioGasto[] = [];
+  for (const e of porProveedor.values()) {
+    const confirmadoEn = (mes: string) => e.porMes.get(mes)?.confirmado ?? false;
+    const activa = [m1, m2, m3].filter(confirmadoEn).length >= 2;
+    if (!activa) continue;
+    if (!confirmadoEn(m1)) {
+      cambios.push({ nombre: e.nombre, tipo: "sin_factura" });
+      continue;
+    }
+    const actual = e.porMes.get(m1)!.importe;
+    const media = [m2, m3, m4].reduce((s, m) => s + (e.porMes.get(m)?.importe ?? 0), 0) / 3;
+    if (media === 0) continue;
+    const diferencia = actual - media;
+    if (Math.abs(diferencia) >= 10 && Math.abs(diferencia / media) >= 0.5) {
+      cambios.push({ nombre: e.nombre, tipo: diferencia > 0 ? "sube" : "baja" });
+    }
+  }
+  return cambios.slice(0, 3);
 }
 

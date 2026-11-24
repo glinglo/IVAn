@@ -25,3 +25,18 @@ export const ETIQUETA_CATEGORIA: Record<CategoriaGasto, string> = {
   comidas: "Comidas",
   otros: "Otros",
 };
+
+/** Color fijo por categoría, para el gráfico apilado de Gastos y las barras de "Por categoría".
+ * Aproximado a partir del lienzo (sin acceso a los valores exactos en esta sesión): si no coincide
+ * con el dibujo, apúntalo para ajustarlo. */
+export const COLOR_CATEGORIA: Record<CategoriaGasto, string> = {
+  software_ia: "var(--color-brand-500)",
+  apis_datos: "var(--color-brand-300)",
+  hosting_dominios: "var(--color-blue-500)",
+  email: "var(--color-blue-300)",
+  publicidad: "var(--color-orange-500)",
+  formacion: "var(--color-yellow-500)",
+  equipos: "var(--color-gray-600)",
+  comidas: "var(--color-green-500)",
+  otros: "var(--color-gray-300)",
+};

@@ -99,7 +99,7 @@ describe("salud", () => {
   it("umbrales justo en el límite", () => {
     const l = libro({
       facturas: [
-        { id: "1", numero: "1", fecha: "2026-01-10", cliente: "Acme", nif_cliente: null, concepto: "x", base: 1000, iva_pct: 21, iva: 210, retencion_pct: 0, retencion: 0, total: 1210, tipo: "nacional", origen: "ivan", pdf_path: null },
+        { id: "1", numero: "1", fecha: "2026-01-10", cliente: "Acme", nif_cliente: null, pais_cliente: "ES", concepto: "x", base: 1000, iva_pct: 21, iva: 210, retencion_pct: 0, retencion: 0, total: 1210, tipo: "nacional", origen: "ivan", pdf_path: null },
       ],
       datos: { facturas: [{ fecha: "2026-01-10", base: 1000, iva_pct: 21, iva: 210, retencion: 0, tipo: "nacional", cliente: "Acme" }], gastos: [], cuotaMes: () => 0, bienes: [], pagado130: () => null, ivaCompensarInicial: 0 },
     });

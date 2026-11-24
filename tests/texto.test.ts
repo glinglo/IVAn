@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nombreCorto } from "../lib/texto";
+import { iniciales, nombreCorto } from "../lib/texto";
 
 describe("nombreCorto", () => {
   it("quita la forma jurídica del final", () => {
@@ -13,5 +13,19 @@ describe("nombreCorto", () => {
   it("deja igual un nombre sin forma jurídica", () => {
     expect(nombreCorto("Fly.io")).toBe("Fly.io");
     expect(nombreCorto("Cloudflare")).toBe("Cloudflare");
+  });
+
+  it("si acaba en un paréntesis, devuelve lo de dentro", () => {
+    expect(nombreCorto("Anysphere, Inc. (Cursor)")).toBe("Cursor");
+  });
+});
+
+describe("iniciales", () => {
+  it("dos palabras: la primera letra de cada una", () => {
+    expect(iniciales("Zapflow Oy")).toBe("ZO");
+  });
+
+  it("una sola palabra: las dos primeras letras", () => {
+    expect(iniciales("Cursor")).toBe("CU");
   });
 });
