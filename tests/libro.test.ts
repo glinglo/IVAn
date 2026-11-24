@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { siguientesPasos, type ContextoPasos, type Libro } from "../lib/libro";
+import { cuandoPaso, siguientesPasos, type ContextoPasos, type Libro } from "../lib/libro";
 import type { Ajustes } from "../lib/db";
 
 const ajustes = (over: Partial<Ajustes> = {}): Ajustes => ({
@@ -119,5 +119,55 @@ describe("siguientesPasos: clave de cada paso", () => {
   it("cliente sin dirección lleva clave 'direccion'", () => {
     const pasos = siguientesPasos(ctx({ clientesSinDireccion: ["Acme"] }));
     expect(pasos.find((p) => p.clave === "direccion")).toBeDefined();
+  });
+
+  it("23/11: el 4T sin abrir lleva texto, detalle y dias hasta la apertura", () => {
+    const pasos = siguientesPasos(ctx());
+    const paso = pasos.find((p) => p.clave === "plazo")!;
+    expect(paso.texto).toBe("Presentar el 4T de 2026");
+    expect(paso.detalle).toBe("Del 01/01 al 01/02");
+    expect(paso.abierto).toBe(false);
+    expect(paso.dias).toBe(39);
+    expect(cuandoPaso(paso)).toBe("En 39 días");
+  });
+
+  it("31/12: el 4T sin abrir, falta 1 día (singular)", () => {
+    const pasos = siguientesPasos(ctx({ hoy: "2026-12-31" }));
+    const paso = pasos.find((p) => p.clave === "plazo")!;
+    expect(paso.dias).toBe(1);
+    expect(cuandoPaso(paso)).toBe("En 1 día");
+  });
+
+  it("29/01: el 4T del año anterior abierto, dias hasta el fin del plazo", () => {
+    const anterior = libro({ anio: 2026 });
+    const pasos = siguientesPasos(ctx({ hoy: "2027-01-29", libro: libro({ anio: 2027 }), libroAnterior: anterior }));
+    const paso = pasos.find((p) => p.clave === "plazo")!;
+    expect(paso.abierto).toBe(true);
+    expect(paso.dias).toBe(3);
+    expect(paso.detalle).toBe("Quedan 3 días (hasta el 01/02/2027)");
+    expect(cuandoPaso(paso)).toBe("Quedan 3 días");
+  });
+
+  it("31/01: queda 1 día (singular)", () => {
+    const anterior = libro({ anio: 2026 });
+    const pasos = siguientesPasos(ctx({ hoy: "2027-01-31", libro: libro({ anio: 2027 }), libroAnterior: anterior }));
+    const paso = pasos.find((p) => p.clave === "plazo")!;
+    expect(paso.dias).toBe(1);
+    expect(paso.detalle).toBe("Queda 1 día (hasta el 01/02/2027)");
+    expect(cuandoPaso(paso)).toBe("Queda 1 día");
+  });
+
+  it("01/02: el mismo día del fin del plazo, 'Último día'", () => {
+    const anterior = libro({ anio: 2026 });
+    const pasos = siguientesPasos(ctx({ hoy: "2027-02-01", libro: libro({ anio: 2027 }), libroAnterior: anterior }));
+    const paso = pasos.find((p) => p.clave === "plazo")!;
+    expect(paso.dias).toBe(0);
+    expect(paso.detalle).toBe("Último día (hasta el 01/02/2027)");
+    expect(cuandoPaso(paso)).toBe("Último día");
+  });
+
+  it("1 gasto sin confirmar (singular) y 2 gastos sin confirmar (plural)", () => {
+    expect(siguientesPasos(ctx({ gastosPorConfirmar: 1 })).find((p) => p.clave === "gastos")?.texto).toBe("1 gasto sin confirmar");
+    expect(siguientesPasos(ctx({ gastosPorConfirmar: 2 })).find((p) => p.clave === "gastos")?.texto).toBe("2 gastos sin confirmar");
   });
 });

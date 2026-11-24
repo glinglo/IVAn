@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart, Tooltip } from "@glinglo/vela-ds";
-import { euros } from "@/lib/fiscal";
+import { eurosSinCentimos } from "@/lib/fiscal";
 import type { MesSerie } from "@/lib/inicio";
 
 const ETIQUETAS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -11,14 +11,18 @@ const NOMBRES_MES = [
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
-const formato = (n: number) => euros(n).replace(/,\d\d €/, " €");
 const capitaliza = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function Barras({ serie, highlight }: { serie: MesSerie[]; highlight?: number[] }) {
   const ultimoConDatos = serie.reduce((acc, m, i) => (m.ingresos || m.gastos ? i : acc), serie.length - 1);
-  const [seleccionado, setSeleccionado] = useState(ultimoConDatos);
+  const [seleccionado, setSeleccionado] = useState<number | null>(null);
 
-  const mes = serie[seleccionado];
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) setSeleccionado(ultimoConDatos);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const mes = seleccionado !== null ? serie[seleccionado] : undefined;
   const mesPendiente = serie.find((m) => m.pendiente);
 
   return (
@@ -44,16 +48,17 @@ export function Barras({ serie, highlight }: { serie: MesSerie[]; highlight?: nu
           values: [m.ingresos, m.gastos + m.cuota],
           pending: m.pendiente,
         }))}
-        formatValue={formato}
+        formatValue={eurosSinCentimos}
         pendingLabel="sin facturar"
         highlight={highlight}
-        selectedIndex={seleccionado}
+        selectedIndex={seleccionado ?? undefined}
         onSelect={setSeleccionado}
       />
 
       {mes && (
         <p className="lg:hidden text-body">
-          {capitaliza(NOMBRES_MES[Number(mes.mes.slice(5, 7)) - 1])} · Ingresos {formato(mes.ingresos)} · Gastos {formato(mes.gastos + mes.cuota)}
+          {capitaliza(NOMBRES_MES[Number(mes.mes.slice(5, 7)) - 1])} · Ingresos {eurosSinCentimos(mes.ingresos)} · Gastos{" "}
+          {eurosSinCentimos(mes.gastos + mes.cuota)}
         </p>
       )}
 

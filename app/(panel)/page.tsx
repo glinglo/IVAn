@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
-import { Badge, Card, CardHeader, PageHeader } from "@glinglo/vela-ds";
+import { Badge, Card, CardHeader, ListItem, PageHeader } from "@glinglo/vela-ds";
 import { contextoPasos, cargarLibro, pygHasta, siguientesPasos } from "@/lib/libro";
-import { cascada, clasificarAvisos, salud, seriesMensuales } from "@/lib/inicio";
-import { euros, hoyMadrid, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
+import { cascada, clasificarAvisos, pygTrimestre, salud, seriesMensuales } from "@/lib/inicio";
+import { eurosSinCentimos, hoyMadrid, nombreMes, plazoTrimestral, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { AvisosInicio } from "@/components/AvisosInicio";
 import { PorHacerEscritorio } from "@/components/PorHacerEscritorio";
@@ -37,6 +37,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
 
   const p = pygHasta(libro, hasta);
   const pAnio = pygHasta(libro, `${anio}-12-31`);
+  const pResultados = periodo === null ? p : pygTrimestre(libro, anio, periodo, hasta);
   const pasos = siguientesPasos(ctx);
   const { destacado, resto } = clasificarAvisos(pasos, hoy);
 
@@ -51,24 +52,37 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
       ? anioCerrado
         ? `Año ${anio} completo`
         : "Acumulado de enero a hoy"
-      : `Acumulado de enero al ${rangoTrimestre(anio, periodo).hasta < hasta ? rangoTrimestre(anio, periodo).hasta.split("-").reverse().join("/") : hasta.split("-").reverse().join("/")}`;
+      : `${periodo}T · de ${nombreMes(rangoTrimestre(anio, periodo).desde)} a ${trimestreEnCurso ? "hoy" : nombreMes(rangoTrimestre(anio, periodo).hasta)}`;
 
   const serie = seriesMensuales(libro, hasta, hoy);
-  const filasCascada = cascada(p);
-  const indicadores = salud(libro, p);
+  const filasCascada = cascada(pResultados);
+  const indicadores = salud(libro, pResultados);
   const margen = indicadores.find((i) => i.clave === "margen")!;
-  const mesesTranscurridos = serie.length || 1;
-  const porMes = Math.round(p.rendimientoNeto / mesesTranscurridos);
+  const mesesTranscurridos =
+    periodo === null
+      ? serie.length || 1
+      : new Date(pResultados.hasta).getUTCMonth() - new Date(pResultados.desde).getUTCMonth() + 1;
+  const porMes = Math.round(pResultados.rendimientoNeto / mesesTranscurridos);
 
   const highlight = periodo === null ? undefined : [0, 1, 2].map((i) => (periodo - 1) * 3 + i).filter((i) => i < serie.length);
 
+  const dd = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
   const pasoPlazo = pasos.find((pa) => pa.clave === "plazo");
-  const impuestosPista = !pasoPlazo || pasoPlazo.nivel === "info" ? "Todo presentado" : `${pasoPlazo.href?.match(/\/(\d)$/)?.[1]}T pendiente · ${pasoPlazo.detalle}`;
-  const gastosPista = `${euros(pAnio.gastosFacturas).replace(/,\d\d €/, " €")} este año`;
+  const matchPlazo = pasoPlazo?.href?.match(/\/impuestos\/(\d+)\/(\d)$/);
+  let impuestosPista = "Todo presentado";
+  if (pasoPlazo && matchPlazo) {
+    const plazo = plazoTrimestral(Number(matchPlazo[1]), Number(matchPlazo[2]));
+    const rango = `del ${dd(plazo.apertura)} al ${dd(plazo.fin)}`;
+    impuestosPista = pasoPlazo.nivel === "info" ? `Próximo: ${matchPlazo[2]}T, ${rango}` : `${matchPlazo[2]}T pendiente · ${rango}`;
+  }
+  const gastosPista = `${eurosSinCentimos(pAnio.gastosFacturas)} este año`;
+  const numTareas = (destacado ? 1 : 0) + resto.length;
 
   return (
     <>
-      <PageHeader title="Hola, Jose" subtitle={`Tus resultados de ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
+      <div className="relative z-20">
+        <PageHeader title="Hola, Jose" subtitle={`Tus resultados de ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
+      </div>
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start">
         <div className="flex flex-col gap-4 lg:col-span-1">
@@ -92,7 +106,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
               <div className="flex flex-col lg:flex-row gap-5">
                 <div className="flex flex-col gap-2 lg:basis-1/3">
                   <h3 className="text-eyebrow text-tertiary">Rendimiento neto</h3>
-                  <div className="text-display">{euros(p.rendimientoNeto).replace(/,\d\d €/, " €")}</div>
+                  <div className="text-display">{eurosSinCentimos(pResultados.rendimientoNeto)}</div>
                   <div className="text-caption">Antes del IRPF de la Renta</div>
                   {margen.valor !== null && (
                     <Badge type={margen.estado === "bien" ? "success" : "onhold"} className="self-start">
@@ -100,7 +114,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                     </Badge>
                   )}
                   <p className="text-body">De cada 100 € que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)} €.</p>
-                  <div className="text-caption">≈ {euros(porMes).replace(/,\d\d €/, " €")} al mes de media</div>
+                  <div className="text-caption">≈ {eurosSinCentimos(porMes)} al mes de media</div>
                 </div>
 
                 <div className="hidden lg:block w-px bg-separator" />
@@ -140,22 +154,22 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
         </div>
 
         <aside aria-label="Por hacer y más detalle" className="hidden lg:flex lg:sticky lg:top-8 flex-col gap-4">
-          <PorHacerEscritorio destacado={destacado} resto={resto} ocultoHoy={ocultoHoy} hoy={hoy} />
+          <Card className="p-5 gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-eyebrow text-tertiary">Por hacer</h2>
+              {numTareas > 0 && <Badge type="primary">{numTareas}</Badge>}
+            </div>
+            <PorHacerEscritorio destacado={destacado} resto={resto} ocultoHoy={ocultoHoy} hoy={hoy} />
 
-          <Card>
+            <div className="h-px bg-separator" />
+
             <h2 className="text-eyebrow text-tertiary">Más detalle</h2>
             <ul className="flex flex-col gap-2">
               <li>
-                <a href={`/impuestos?anio=${anio}`} className="flex flex-col">
-                  <span>Impuestos</span>
-                  <span className="text-tertiary">{impuestosPista}</span>
-                </a>
+                <ListItem title="Impuestos" description={impuestosPista} href={`/impuestos?anio=${anio}`} chevron />
               </li>
               <li>
-                <a href={`/gastos?anio=${anio}`} className="flex flex-col">
-                  <span>En qué se van los gastos</span>
-                  <span className="text-tertiary">{gastosPista}</span>
-                </a>
+                <ListItem title="En qué se van los gastos" description={gastosPista} href={`/gastos?anio=${anio}`} chevron />
               </li>
             </ul>
           </Card>

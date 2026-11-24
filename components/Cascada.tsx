@@ -1,10 +1,8 @@
 "use client";
 
 import { Waterfall } from "@glinglo/vela-ds";
-import { euros } from "@/lib/fiscal";
+import { eurosSinCentimos } from "@/lib/fiscal";
 import type { FilaCascada } from "@/lib/inicio";
-
-const formato = (n: number) => euros(n).replace(/,\d\d €/, " €");
 
 export function Cascada({ filas }: { filas: FilaCascada[] }) {
   const filasCon = (clave: "label" | "labelCorta") =>
@@ -13,10 +11,10 @@ export function Cascada({ filas }: { filas: FilaCascada[] }) {
   return (
     <>
       <div className="hidden lg:block">
-        <Waterfall aria-label="De lo facturado al rendimiento" rows={filasCon("label")} format={formato} />
+        <Waterfall aria-label="De lo facturado al rendimiento" rows={filasCon("label")} format={eurosSinCentimos} />
       </div>
       <div className="lg:hidden">
-        <Waterfall aria-label="De lo facturado al rendimiento" rows={filasCon("labelCorta")} format={formato} />
+        <Waterfall aria-label="De lo facturado al rendimiento" rows={filasCon("labelCorta")} format={eurosSinCentimos} />
       </div>
     </>
   );

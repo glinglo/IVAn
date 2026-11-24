@@ -86,9 +86,9 @@ describe("avisos", () => {
 
 describe("formato y PDF", () => {
   it("euros", () => {
-    expect(euros(3060)).toBe("3.060,00 €");
-    expect(euros(1081.2)).toBe("1.081,20 €");
-    expect(euros(-4.98)).toBe("-4,98 €");
+    expect(euros(3060)).toBe("3.060,00 €");
+    expect(euros(1081.2)).toBe("1.081,20 €");
+    expect(euros(-4.98)).toBe("-4,98 €");
   });
   it("limpia caracteres que la fuente no pinta", () => {
     expect(limpiar("Disseny i implementació · ✓ → 中")).toBe("Disseny i implementació · ? ? ?");

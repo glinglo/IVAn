@@ -146,14 +146,25 @@ export interface Paso {
   href?: string;
   /** Días hasta el inicio del plazo (sin abrir) o hasta el final (abierto). */
   dias?: number;
+  /** Si `dias` cuenta hasta el final de un plazo ya abierto, en vez de hasta su apertura. */
+  abierto?: boolean;
 }
 
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
-/** Texto de «cuándo» a partir de `dias`, para el eyebrow de una tarjeta y el badge del drawer. */
+/** "Queda 1 día" / "Quedan N días" / "Último día", o "En 1 día" / "En N días" si el plazo no ha abierto. */
 export function cuandoPaso(p: Paso): string | null {
   if (p.dias === undefined) return null;
-  return p.clave === "plazo" && p.detalle?.startsWith("Quedan") ? `Quedan ${p.dias} días` : `En ${p.dias} días`;
+  if (p.dias === 0) return "Último día";
+  if (p.abierto) return p.dias === 1 ? "Queda 1 día" : `Quedan ${p.dias} días`;
+  return p.dias === 1 ? "En 1 día" : `En ${p.dias} días`;
+}
+
+/** "Quedan N días (hasta el …)" / "Queda 1 día (…)" / "Último día (…)". */
+function detalleDiasRestantes(dias: number, fin: string): string {
+  const hasta = `(hasta el ${fin.split("-").reverse().join("/")})`;
+  if (dias === 0) return `Último día ${hasta}`;
+  return dias === 1 ? `Queda 1 día ${hasta}` : `Quedan ${dias} días ${hasta}`;
 }
 
 export interface ContextoPasos {
@@ -191,9 +202,10 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
       nivel: abierto && quedan <= 10 ? "urgente" : abierto ? "pendiente" : "info",
       clave: "plazo",
       texto: abierto ? `Presentar ${faltan.join(", ")} del ${plazo.t}T ${plazo.anio}` : `Presentar el ${plazo.t}T de ${plazo.anio}`,
-      detalle: abierto ? `Quedan ${quedan} días (hasta el ${plazo.fin.split("-").reverse().join("/")})` : `Del ${ddmm(plazo.apertura)} al ${ddmm(plazo.fin)}`,
+      detalle: abierto ? detalleDiasRestantes(quedan, plazo.fin) : `Del ${ddmm(plazo.apertura)} al ${ddmm(plazo.fin)}`,
       href: `/impuestos/${plazo.anio}/${plazo.t}`,
       dias: abierto ? quedan : diasHastaApertura,
+      abierto,
     });
     break;
   }
