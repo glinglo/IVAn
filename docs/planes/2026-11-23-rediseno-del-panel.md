@@ -1048,6 +1048,49 @@ El 24/11 se cargaron en `presentaciones` los 303 y 130 de 2023, 2024 y 2025 (los
 - **`next start` + `curl`** con cookie a `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos?anio=2025`, `/impuestos?anio=2023`, `/impuestos/2026/3`, `/impuestos/2026/4?m=130`, `/impuestos/2026/4?m=349`, `/impuestos/2023/1` e `/impuestos/2026/390`: las once dan `200`, **incluso sin la migración 008 aplicada** en el Supabase de `.env.local` (gracias a que `casillas` no está en la consulta compartida). Pendiente de que Jose aplique `008_casillas_presentadas.sql` y, si quiere el histórico ya, `scripts/historico-casillas.sql`, en el SQL Editor de Supabase; con la migración aplicada, el aviso del saldo y las casillas 110/78/87 presentadas deberían aparecer.
 - **Prueba de integración de las 56 conversaciones:** todas pasan (en la base local, con la migración 008 ya aplicada por `reset-db.sh`). No hizo falta cambiar ningún enlace ni texto del bot: el único enlace de Impuestos que usa el agente (`resumen_390` → `/impuestos/{anio}/390`) ya apuntaba bien desde antes; `/panel` sigue mandando a `/` (Inicio), sin cambios.
 
+## Fase D.1 · Años anteriores con la misma estructura que el año en curso (24/11/2026)
+
+Al revisar la vista previa, `/impuestos?anio=2025` queda como una lista suelta, no como el resto del panel. Hay tres problemas:
+- la etiqueta «Presentados» queda pegada al subtítulo, porque falta el `gap-8` de la rama con datos;
+- todo va a una columna;
+- no hay gráfico ni comparativa entre años.
+
+Los datos ya están en Supabase: los importes de `presentaciones` y, desde la migración 008, las casillas del 303. Así que los años `sinDatos` pueden usar la misma maqueta que 2026. Lo único que cambia es la fuente: lo presentado en vez de lo calculado.
+
+**Regla:** en `/impuestos` y `/impuestos/[anio]/[t]` no hay dos maquetas. La rama `sinDatos` usa el mismo esqueleto (contenedor `flex flex-col gap-8`, rejilla `lg:grid-cols-[minmax(0,1fr)_340px]`, mismas tarjetas) y solo oculta lo que no tiene sentido sin facturas.
+
+### `/impuestos?anio=X` sin datos
+
+**Columna izquierda.** Tarjeta «Presentados en {año}» con la misma tabla que en 2026:
+- Trimestre: enlace a `/impuestos/{año}/{t}`.
+- Presentado: la fecha.
+- 303: importe [71] y badge («A compensar» / «Ingresado» / «Resultado cero»).
+- 130: importe [19].
+- En móvil, la misma lista con enlace que en 2026.
+- La línea gris «Presentado por la gestoría…» va dentro de la tarjeta, al pie, como `text-caption`.
+
+**Columna derecha:**
+- «Pagado en {año}»: total, «IRPF a cuenta X · IVA Y» y `GraficoPagos` por trimestre, alimentado desde `presentaciones` (130 = `importe`; IVA = `max(0, importe del 303)`). 2025 → IRPF 7.202,05 € · IVA 0 €.
+- «Lo pagado cada año»: la misma tarjeta, con el año elegido resaltado.
+- Sin «Próximo», sin aviso del saldo y sin «Resumen anual», porque no hay 390 que calcular.
+
+**Mejora también para 2026:** en la tabla «Presentados», que las columnas 303 y 130 enseñen el importe además del badge. Hoy en escritorio solo sale el badge y hay que entrar al trimestre para ver la cifra.
+
+### `/impuestos/[anio]/[t]` sin datos
+
+- Mismo esqueleto que con datos: tarjeta con las pestañas 303 · 130 y columna derecha. No hay pestaña 349, porque de esos años no hay facturas.
+- Subtítulo: «Presentado el {fecha}», en vez de «Plazo: del … al …», que no aporta nada en un trimestre cerrado.
+- **303:** cifra grande [71] con `frase303`, y la rejilla de casillas con `CopyValue` usando las casillas presentadas ([110], [78], [87], [71]). Sin casillas calculadas.
+- **130:** cifra grande [19], el importe presentado. Sin desglose, porque no lo tenemos.
+- Columna derecha: solo la línea gris. Sin «Cómo presentarlo» ni «Este trimestre también».
+
+**Comprueba:**
+- `/impuestos?anio=2025` a 1440 px: dos columnas como 2026. Tabla con −26,10 / −274,60 / −376,67 / −75,60 y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56. «Pagado en 2025» = 7.202,05 € con gráfico.
+- `/impuestos?anio=2024`: 303 del 3T 471,87 «Ingresado» y del 4T 644,97 «Ingresado». «Pagado en 2024» = 9.933,21 € (IRPF 8.816,37 · IVA 1.116,84).
+- `/impuestos/2024/2`: [110] 666,73 · [78] 462,21 · [87] 204,52 · [71] 0,00.
+- Móvil a 390 px: todo apilado, con la misma separación que 2026.
+- `npm test`, `npm run typecheck`, `next build` y `curl` a las once rutas de la fase D.
+
 ## Fase E · Segundo nivel y limpieza
 
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».
