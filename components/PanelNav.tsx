@@ -63,8 +63,9 @@ export function NavEscritorio({
       collapsible
       defaultCollapsed={barraContraida}
       onCollapsedChange={onCollapsedChange}
-      className="hidden lg:flex sticky top-0 h-dvh overflow-y-auto"
+      className="hidden lg:flex sticky top-0 h-dvh"
       aria-label="Secciones"
+      action={{ label: "Abrir el bot", icon: <Send size={16} />, href: BOT_URL, target: "_blank" }}
       footer={
         <>
           <SidebarNavItem icon={<Download size={16} />} href={`/api/exportar?anio=${anio}`}>
@@ -74,9 +75,6 @@ export function NavEscritorio({
         </>
       }
     >
-      <SidebarNavItem icon={<Send size={16} />} variant="primary" href={BOT_URL} target="_blank">
-        Abrir el bot
-      </SidebarNavItem>
       {items.map((i) => (
         <SidebarNavItem
           key={i.href}
