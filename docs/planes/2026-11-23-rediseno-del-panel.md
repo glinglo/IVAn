@@ -669,6 +669,13 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 2. **El «€» de «te quedan 72 €.» sigue partiéndose** en escritorio: la frase de `app/(panel)/page.tsx` aún usa espacios normales. Los dos «€» de esa frase con `\u00a0` (punto 8 de la B.3).
 3. **Los títulos de las tareas se cortan** en la columna derecha («Registrar la factura de noviemb…» y el detalle «…mándale el PDF al…»): `NoticeCard size="sm"` sí recorta a una línea. Si admite `className`, que el título y el detalle envuelvan hasta dos líneas desde IVAn; si no, para y apúntalo como cambio de Vela (y deja el recorte como está).
 
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+1. **Barras del trimestre:** `app/(panel)/page.tsx` recorta `serie` a los tres meses del trimestre elegido (`serieBarras`) antes de pasarla a `Barras`, y ya no se le pasa `highlight` (queda `undefined`, es decir, sin resaltado): con un trimestre, el gráfico muestra solo esos meses; con «Año», la serie completa como antes. `Barras.tsx` no cambia: ya elige el último mes con datos de la serie que recibe, así que en un trimestre preselecciona el último mes de ese trimestre con datos (solo en móvil, como ya hacía).
+2. `app/(panel)/page.tsx`: los dos «€» de «De cada 100 € que facturas, te quedan N €.» ahora con `&nbsp;` antes del símbolo, como ya hacía `euros()` desde la B.3 para el resto de cifras.
+3. **Desviación apuntada:** `NoticeCard size="sm"` recorta el título a una línea con una clase `truncate` fija en el `<span>` interno del paquete (comprobado en `node_modules/@glinglo/vela-ds/dist/index.js`); el `className` que admite el componente solo llega al `<a>` que envuelve toda la tarjeta, no al título ni a la descripción. No hay forma de envolver a dos líneas desde IVAn sin tocar Vela: se deja el recorte como está, pendiente de que Vela exponga esas clases.
+4. **Comprobado:** `npm test`, `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=3`, `/?periodo=4`, `/?anio=2025` en `200`.
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**

@@ -64,7 +64,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
       : new Date(pResultados.hasta).getUTCMonth() - new Date(pResultados.desde).getUTCMonth() + 1;
   const porMes = Math.round(pResultados.rendimientoNeto / mesesTranscurridos);
 
-  const highlight = periodo === null ? undefined : [0, 1, 2].map((i) => (periodo - 1) * 3 + i).filter((i) => i < serie.length);
+  const serieBarras = periodo === null ? serie : serie.slice((periodo - 1) * 3, periodo * 3);
 
   const dd = (iso: string) => iso.split("-").reverse().slice(0, 2).join("/");
   const pasoPlazo = pasos.find((pa) => pa.clave === "plazo");
@@ -113,7 +113,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                       Margen {Math.round(margen.valor * 100)} %
                     </Badge>
                   )}
-                  <p className="text-body">De cada 100 € que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)} €.</p>
+                  <p className="text-body">De cada 100&nbsp;€ que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)}&nbsp;€.</p>
                   <div className="text-caption">≈ {eurosSinCentimos(porMes)} al mes de media</div>
                 </div>
 
@@ -128,7 +128,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
 
               <div className="h-px bg-separator" />
 
-              <Barras serie={serie} highlight={highlight} />
+              <Barras serie={serieBarras} />
             </Card>
           </BloqueResultados>
 
