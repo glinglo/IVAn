@@ -1091,6 +1091,19 @@ Los datos ya están en Supabase: los importes de `presentaciones` y, desde la mi
 - Móvil a 390 px: todo apilado, con la misma separación que 2026.
 - `npm test`, `npm run typecheck`, `next build` y `curl` a las once rutas de la fase D.
 
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-d`)
+
+- **`/impuestos` unificada:** una sola función de página; la rama `sinDatos` ya no tiene su propio `return` con otra maqueta. Se calcula una lista común `filas: FilaTrimestre[]` (trimestre, fecha, `[71]`, `[19]`, si el 130 está presentado) desde `resumenTrimestre` cuando hay datos, o desde `libro.presentaciones` cuando no, y el resto de la página (tabla/lista «Presentados», `GraficoPagos`, «Lo pagado cada año») es el mismo JSX para los dos casos; solo «Próximo», el aviso del saldo y «Resumen anual» se condicionan a `datos`.
+- **Mejora de la tabla «Presentados» (también en 2026):** las columnas 303 y 130 llevan ahora el `Badge` y el importe juntos (antes solo el `Badge`; había que entrar al trimestre para ver la cifra).
+- **`/impuestos/[anio]/[t]` unificada** igual: la tarjeta principal, las pestañas y la rejilla de casillas son el mismo marcado con y sin datos. Cambios por rama:
+  - `PestanasModelo` gana la prop `modelos` (opcional): sin datos, solo `["303", "130"]` (no hay 349 de esos años).
+  - Subtítulo de la cabecera: el plazo con datos, «Presentado el {fecha}» sin ellos.
+  - Casillas: con datos, la rejilla completa de siempre; sin datos, solo `[110]`/`[78]`/`[87]`/`[71]` tal como se presentaron (si hay `casillas`, vía la misma consulta aparte de la fase D) o, si no hay casillas guardadas, un único `CopyValue` con el resultado presentado.
+  - Columna derecha: con datos, «Plazo»/«Cómo presentarlo»/«Este trimestre también»; sin datos, solo la línea gris, sin tarjetas.
+- **Comprobado con los datos reales de producción** (la migración 008 y `historico-casillas.sql` ya estaban aplicados en Supabase cuando he probado esto, a diferencia de la fase D): `/impuestos?anio=2025` da «Pagado en 2025» = 7.202,05 € y la tabla con −26,10 €/1.728,18 € en el 1T (y el resto de trimestres, igual que pide la «Comprueba»); `/impuestos?anio=2024` da «Pagado en 2024» = 9.933,21 € (IRPF 8.816,37 € · IVA 1.116,84 €); `/impuestos/2024/2` da `[110]` 666,73 €, `[78]` 462,21 € y `[71]` 0,00 €. Las cuatro cifras, exactas a las de la «Comprueba» del plan.
+- **`npm test`** (148, sin tests nuevos: esta fase no añade funciones, solo reordena las páginas), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a las trece rutas (las once de la fase D más `/impuestos?anio=2024` e `/impuestos/2024/2`): todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
+- No he podido comprobar la vista a 390 px con una herramienta de captura de pantalla (no disponible en esta sesión): comprobado por lectura del HTML servido que la rama sin datos usa la misma rejilla (`lg:grid-cols-[minmax(0,1fr)_340px]`) y el mismo `flex flex-col gap-8` que 2026, así que en móvil (sin el prefijo `lg:`) debería apilarse igual. Pendiente de que Jose lo confirme en el Mac o en el móvil.
+
 ## Fase E · Segundo nivel y limpieza
 
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».

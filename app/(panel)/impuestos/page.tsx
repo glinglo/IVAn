@@ -1,4 +1,4 @@
-import { Badge, Button, Card, ListGroup, ListItem, NoticeCard, PageHeader } from "@glinglo/vela-ds";
+import { Badge, Card, NoticeCard, PageHeader } from "@glinglo/vela-ds";
 import {
   cargarAniosConPresentaciones,
   cargarLibro,
@@ -14,6 +14,14 @@ import { GraficoPagos } from "@/components/GraficoPagos";
 
 const ETIQUETAS_T = ["1T", "2T", "3T", "4T"];
 
+interface FilaTrimestre {
+  t: number;
+  fecha: string | null;
+  c71: number | null;
+  importe130: number | null;
+  presentado130: boolean | null; // null = no aplica (año sin datos)
+}
+
 export default async function Impuestos({ searchParams }: { searchParams: Promise<{ anio?: string }> }) {
   const hoy = hoyMadrid();
   const anioActual = Number(hoy.slice(0, 4));
@@ -24,93 +32,65 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
   const anioCerrado = !esAnioActual;
   const tHoy = trimestreDe(hoy).t;
   const tActual = esAnioActual ? tHoy : 4;
+  const datos = !sinDatos(libro);
 
-  if (sinDatos(libro)) {
-    const trimestres = [1, 2, 3, 4]
-      .map((t) => ({
-        t,
-        p303: libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === t) ?? null,
-        p130: libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === t) ?? null,
-      }))
-      .filter((x) => x.p303 || x.p130);
-    const pagadoAnio = round2Total(
-      trimestres.reduce((s, x) => s + (x.p130?.importe ?? 0) + Math.max(0, x.p303?.importe ?? 0), 0),
-    );
-
-    return (
-      <>
-        <PageHeader title="Impuestos" subtitle={String(anio)} actions={<AccionesCabecera anio={anio} anioActual={anioActual} anios={anios} />} />
-        <div className="flex flex-col gap-6">
-          {trimestres.length === 0 ? (
-            <p className="text-tertiary">No hay nada presentado de {anio}.</p>
-          ) : (
-            <ListGroup label="Presentados">
-              {trimestres.map(({ t, p303, p130 }) => (
-                <ListItem
-                  key={t}
-                  title={ETIQUETAS_T[t - 1]}
-                  description={p303?.fecha ? fechaES(p303.fecha) : p130?.fecha ? fechaES(p130.fecha) : undefined}
-                  value={
-                    [
-                      p303 ? textoResultado303(p303.importe ?? 0) : null,
-                      p130 ? `IRPF ${euros(p130.importe ?? 0)}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || undefined
-                  }
-                />
-              ))}
-            </ListGroup>
-          )}
-          <Card className="gap-1">
-            <h2 className="text-eyebrow text-tertiary">Pagado en {anio}</h2>
-            <div className="text-title">{euros(pagadoAnio)}</div>
-          </Card>
-          <p className="text-caption text-tertiary">
-            Presentado por la gestoría. IVAn no tiene las facturas de este año, así que solo muestra lo presentado.
-          </p>
-        </div>
-      </>
-    );
-  }
-
-  const trimestres = [1, 2, 3, 4].map((t) => ({ t, ...resumenTrimestre(libro, t) })).filter((x) => x.t <= tActual);
-
-  // Próximo trimestre a preparar (solo tiene sentido en el año en curso).
+  let filas: FilaTrimestre[];
+  let irpfAnio: number;
+  let ivaAnio: number;
+  let graficoPagos: { label: string; irpf: number; iva: number; pendiente?: boolean }[];
   let proximo: { t: number; dias: number; abierto: boolean } | null = null;
-  if (esAnioActual) {
-    const abierto = plazoAbierto(hoy);
-    if (abierto && abierto.anio === anio) {
-      proximo = { t: abierto.t, dias: diasEntre(hoy, abierto.fin), abierto: true };
-    } else if (tHoy <= 4) {
-      proximo = { t: tHoy, dias: diasEntre(hoy, plazoTrimestral(anio, tHoy).apertura), abierto: false };
-    }
-  }
-
-  // Presentados: ¿algún 130 presentado difiere del cálculo de IVAn? (la cuota de autónomo).
+  let saldo: ReturnType<typeof saldoIvaCompensar> = null;
   let algunDifiere = false;
-  for (const x of trimestres) {
-    const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === x.t);
-    if (p130?.importe !== null && p130?.importe !== undefined && Math.abs(p130.importe - x.m130.aIngresar) > 0.01) algunDifiere = true;
+
+  if (datos) {
+    const trimestres = [1, 2, 3, 4].map((t) => ({ t, ...resumenTrimestre(libro, t) })).filter((x) => x.t <= tActual);
+    filas = trimestres.map((x) => {
+      const p303 = libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === x.t);
+      const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === x.t);
+      if (p130?.importe !== null && p130?.importe !== undefined && Math.abs(p130.importe - x.m130.aIngresar) > 0.01) algunDifiere = true;
+      return {
+        t: x.t,
+        fecha: p303?.fecha ?? p130?.fecha ?? null,
+        c71: x.m303.c71,
+        importe130: x.m130.aIngresar,
+        presentado130: x.presentado("130"),
+      };
+    });
+    irpfAnio = round2Total(trimestres.reduce((s, x) => s + x.m130.aIngresar, 0));
+    ivaAnio = round2Total(trimestres.reduce((s, x) => s + Math.max(0, x.m303.c71), 0));
+    graficoPagos = trimestres.map((x) => ({
+      label: ETIQUETAS_T[x.t - 1],
+      irpf: x.m130.aIngresar,
+      iva: Math.max(0, x.m303.c71),
+      pendiente: esAnioActual && x.t === tHoy,
+    }));
+    if (esAnioActual) {
+      const presentaciones303 = await cargarPresentaciones303();
+      saldo = saldoIvaCompensar(presentaciones303);
+      const abierto = plazoAbierto(hoy);
+      if (abierto && abierto.anio === anio) proximo = { t: abierto.t, dias: diasEntre(hoy, abierto.fin), abierto: true };
+      else if (tHoy <= 4) proximo = { t: tHoy, dias: diasEntre(hoy, plazoTrimestral(anio, tHoy).apertura), abierto: false };
+    }
+  } else {
+    filas = [1, 2, 3, 4]
+      .map((t) => {
+        const p303 = libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === t) ?? null;
+        const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === t) ?? null;
+        if (!p303 && !p130) return null;
+        return {
+          t,
+          fecha: p303?.fecha ?? p130?.fecha ?? null,
+          c71: p303?.importe ?? null,
+          importe130: p130?.importe ?? null,
+          presentado130: p130 ? true : null,
+        };
+      })
+      .filter((x): x is FilaTrimestre => x !== null);
+    irpfAnio = round2Total(filas.reduce((s, x) => s + (x.importe130 ?? 0), 0));
+    ivaAnio = round2Total(filas.reduce((s, x) => s + Math.max(0, x.c71 ?? 0), 0));
+    graficoPagos = filas.map((x) => ({ label: ETIQUETAS_T[x.t - 1], irpf: x.importe130 ?? 0, iva: Math.max(0, x.c71 ?? 0) }));
   }
 
-  // Aviso del saldo de IVA a compensar (todos los años, no solo este).
-  const presentaciones303 = await cargarPresentaciones303();
-  const saldo = esAnioActual ? saldoIvaCompensar(presentaciones303) : null;
-
-  // Pagado en el año (calculado por IVAn) y gráfico por trimestre.
-  const irpfPorT = trimestres.map((x) => x.m130.aIngresar);
-  const ivaPorT = trimestres.map((x) => Math.max(0, x.m303.c71));
-  const irpfAnio = round2Total(irpfPorT.reduce((s, v) => s + v, 0));
-  const ivaAnio = round2Total(ivaPorT.reduce((s, v) => s + v, 0));
-  const graficoPagos = trimestres.map((x, i) => ({
-    label: ETIQUETAS_T[x.t - 1],
-    irpf: irpfPorT[i],
-    iva: ivaPorT[i],
-    pendiente: esAnioActual && x.t === tHoy,
-  }));
-
-  // Lo pagado cada año (de lo presentado, no de lo calculado).
   const pagadoPorAnio = await cargarPagadoPorAnio();
   const maxPagado = Math.max(...pagadoPorAnio.map((x) => x.total), 1);
 
@@ -148,58 +128,81 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
           <Card className="gap-3">
             <h2 className="text-eyebrow text-tertiary">Presentados en {anio}</h2>
 
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full text-body">
-                <thead>
-                  <tr className="text-caption text-tertiary text-left">
-                    <th className="font-normal py-2">Trimestre</th>
-                    <th className="font-normal py-2">Presentado</th>
-                    <th className="font-normal py-2">303</th>
-                    <th className="font-normal py-2">130</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {trimestres.map((x) => {
-                    const p303 = libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === x.t);
-                    const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === x.t);
-                    return (
-                      <tr key={x.t} className="border-t border-separator">
-                        <td className="py-2">
-                          <a href={`/impuestos/${anio}/${x.t}`} className="text-link-secondary">
-                            {ETIQUETAS_T[x.t - 1]}
-                          </a>
-                        </td>
-                        <td className="py-2">{p303?.fecha ? fechaES(p303.fecha) : p130?.fecha ? fechaES(p130.fecha) : "—"}</td>
-                        <td className="py-2">
-                          <Badge type={x.m303.c71 > 0 ? "secondary" : x.m303.c71 < 0 ? "onhold" : "success"}>
-                            {x.m303.c71 > 0 ? "Ingresado" : x.m303.c71 < 0 ? "A compensar" : "Resultado cero"}
-                          </Badge>
-                        </td>
-                        <td className="py-2">{x.presentado("130") ? <Badge type="success">Presentado</Badge> : <Badge type="onhold">Provisional</Badge>}</td>
+            {filas.length === 0 ? (
+              <p className="text-tertiary">No hay nada presentado de {anio}.</p>
+            ) : (
+              <>
+                <div className="hidden lg:block overflow-x-auto">
+                  <table className="w-full text-body">
+                    <thead>
+                      <tr className="text-caption text-tertiary text-left">
+                        <th className="font-normal py-2">Trimestre</th>
+                        <th className="font-normal py-2">Presentado</th>
+                        <th className="font-normal py-2">303</th>
+                        <th className="font-normal py-2">130</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody>
+                      {filas.map((x) => (
+                        <tr key={x.t} className="border-t border-separator">
+                          <td className="py-2">
+                            <a href={`/impuestos/${anio}/${x.t}`} className="text-link-secondary">
+                              {ETIQUETAS_T[x.t - 1]}
+                            </a>
+                          </td>
+                          <td className="py-2">{x.fecha ? fechaES(x.fecha) : "—"}</td>
+                          <td className="py-2">
+                            {x.c71 !== null ? (
+                              <span className="flex items-center gap-2">
+                                <Badge type={x.c71 > 0 ? "secondary" : x.c71 < 0 ? "onhold" : "success"}>
+                                  {x.c71 > 0 ? "Ingresado" : x.c71 < 0 ? "A compensar" : "Resultado cero"}
+                                </Badge>
+                                {euros(x.c71)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="py-2">
+                            {x.importe130 !== null ? (
+                              <span className="flex items-center gap-2">
+                                {x.presentado130 !== null && <Badge type={x.presentado130 ? "success" : "onhold"}>{x.presentado130 ? "Presentado" : "Provisional"}</Badge>}
+                                {euros(x.importe130)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
 
-            <ul className="lg:hidden flex flex-col gap-3">
-              {trimestres.map((x) => (
-                <li key={x.t}>
-                  <a href={`/impuestos/${anio}/${x.t}`} className="flex items-center justify-between gap-3">
-                    <span>{ETIQUETAS_T[x.t - 1]}</span>
-                    <span className="text-caption text-tertiary">
-                      303 {euros(x.m303.c71)} · 130 {euros(x.m130.c07)}
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
+                <ul className="lg:hidden flex flex-col gap-3">
+                  {filas.map((x) => (
+                    <li key={x.t}>
+                      <a href={`/impuestos/${anio}/${x.t}`} className="flex items-center justify-between gap-3">
+                        <span>{ETIQUETAS_T[x.t - 1]}</span>
+                        <span className="text-caption text-tertiary">
+                          303 {x.c71 !== null ? euros(x.c71) : "—"} · 130 {x.importe130 !== null ? euros(x.importe130) : "—"}
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
 
-            {algunDifiere && (
-              <p className="text-caption text-tertiary">
-                El 130 de la gestoría no incluía tu cuota de autónomo como gasto; por eso IVAn calcula otra cifra.
-              </p>
+                {algunDifiere && (
+                  <p className="text-caption text-tertiary">
+                    El 130 de la gestoría no incluía tu cuota de autónomo como gasto; por eso IVAn calcula otra cifra.
+                  </p>
+                )}
+                {!datos && (
+                  <p className="text-caption text-tertiary">
+                    Presentado por la gestoría. IVAn no tiene las facturas de este año, así que solo muestra lo presentado.
+                  </p>
+                )}
+              </>
             )}
           </Card>
         </div>
@@ -250,35 +253,31 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
             </Card>
           )}
 
-          <Card className="gap-3">
-            <h3 className="text-eyebrow text-tertiary">Resumen anual</h3>
-            <ul className="flex flex-col gap-2">
-              {(anioCerrado || tActual === 4) && (
+          {datos && (
+            <Card className="gap-3">
+              <h3 className="text-eyebrow text-tertiary">Resumen anual</h3>
+              <ul className="flex flex-col gap-2">
+                {(anioCerrado || tActual === 4) && (
+                  <li>
+                    <a href={`/impuestos/${anio}/390`} className="flex items-center justify-between text-body">
+                      <span>Modelo 390</span>
+                      <span className="text-link-secondary">Ver ›</span>
+                    </a>
+                  </li>
+                )}
                 <li>
-                  <a href={`/impuestos/${anio}/390`} className="flex items-center justify-between text-body">
-                    <span>Modelo 390</span>
+                  <a href={`/impuestos/${anio}/${tActual}?m=349`} className="flex items-center justify-between text-body">
+                    <span>Modelo 349 · {ETIQUETAS_T[tActual - 1]}</span>
                     <span className="text-link-secondary">Ver ›</span>
                   </a>
                 </li>
-              )}
-              <li>
-                <a href={`/impuestos/${anio}/${tActual}?m=349`} className="flex items-center justify-between text-body">
-                  <span>Modelo 349 · {ETIQUETAS_T[tActual - 1]}</span>
-                  <span className="text-link-secondary">Ver ›</span>
-                </a>
-              </li>
-            </ul>
-          </Card>
+              </ul>
+            </Card>
+          )}
         </aside>
       </div>
     </div>
   );
-}
-
-function textoResultado303(c71: number): string {
-  if (c71 > 0) return `IVA ${euros(c71)} ingresado`;
-  if (c71 < 0) return `IVA ${euros(-c71)} a compensar`;
-  return "IVA resultado cero";
 }
 
 function round2Total(n: number): number {
