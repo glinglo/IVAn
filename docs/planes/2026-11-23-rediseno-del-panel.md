@@ -1144,6 +1144,38 @@ El cálculo de IVAn solo se usa para los trimestres sin presentar (hoy, el 4T), 
 
 ## Fase E · Segundo nivel y limpieza
 
+### E.1 · Inicio: «Te queda» después del IRPF a cuenta (añadido el 24/11/2026)
+
+Jose quiere ver en Inicio lo que le queda de verdad. El rendimiento neto no cambia: es la base del 130 y de la Renta. Lo que se añade es lo que va después.
+
+**Qué entra y qué no:**
+- **IVA (303): no entra.** No es dinero de Jose y los ingresos ya van sin IVA. El saldo a compensar tampoco: es a su favor y se ve en Impuestos.
+- **IRPF a cuenta: sí entra**, en dos partes:
+  - **Pagado:** los importes del 130 presentados (`presentaciones`, modelo 130) más las retenciones de las facturas (`pyg().retenciones`).
+  - **Por pagar:** el 130 del trimestre que aún no se ha presentado, estimado con `modelo130(d, anio, t).aIngresar`. Por ejemplo, en noviembre es el 4T, que se paga en enero. Si sale 0, la línea no aparece.
+
+**Con el periodo seleccionado:**
+- **Año:** suma de los 130 de los trimestres del año más las retenciones del año. «Por pagar» solo si hay un trimestre sin presentar.
+- **1T…4T:** el 130 de ese trimestre (el presentado o, si no lo está, el estimado) más las retenciones de las facturas de ese trimestre. Así cuadra con «solo ese trimestre»: los importes del 130 ya son por trimestre.
+
+**Función nueva en `lib/libro.ts`, con tests:** `irpfACuenta(libro, presentaciones, anio, periodo, hoy) → { pagado130, retenciones, porPagar, total }`. Casos:
+- 2026 con 1T–3T presentados y el 4T estimado.
+- Un trimestre presentado.
+- Un trimestre sin presentar.
+- 130 a 0.
+
+**En la tarjeta «Resultados»:**
+- La `Cascada` termina en «Rendimiento neto», como ahora, y sigue con dos filas en otro estilo, separadas por una línea:
+  - «IRPF a cuenta» en negativo. Con «Por pagar», detalle debajo: «4.586 € pagados + ≈ X € del 4T (se paga en enero)».
+  - **«Te queda ≈ …»** en negrita.
+- Nota corta bajo la cascada: «El IVA no cuenta: no es tuyo. La Renta ajusta el IRPF: puede salir a pagar o a devolver».
+- La cifra grande sigue siendo el rendimiento neto, que es la que cuadra con el 130 y la Renta.
+- La frase «De cada 100 € que facturas, te quedan X €» pasa a «… te quedan X € antes del IRPF».
+- El tooltip «Antes del IRPF de la Renta…» se queda.
+- Móvil igual, con el mismo orden.
+
+**Comprueba:** con «Año 2026», «IRPF a cuenta pagado» = 130 de 1T–3T + retenciones ≈ 4.586 €. «Te queda» = rendimiento neto − IRPF a cuenta (pagado + por pagar).
+
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».
   - **Impuestos y cuota:** total, `StackedBar` (cuota, IRPF a cuenta y resto) y los dos textos: el IVA no cuenta; la Renta cierra la cuenta.
   - **Salud:** un `CardIndicator` por indicador, primero los que están en riesgo.
