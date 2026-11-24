@@ -769,6 +769,71 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 - `npm test` (112 tests) y `npm run typecheck` sin errores. La prueba de integración de las 56 conversaciones sigue pendiente de repetirse desde este entorno (como en la nota anterior); no la he vuelto a correr porque este cambio es solo de las páginas del panel, sin tocar el bot.
 - **Un gasto nuevo por foto guardando la categoría:** no comprobado end-to-end (necesita Telegram y la migración aplicada); el código de `lib/gastos.ts`/`lib/claude.ts` ya pasa `categoria_gasto` → `categoria` en el `insert`/`update`, pendiente de probarlo en real tras aplicar la migración.
 
+## Fase C.2 · Ventas y Gastos v2: cifras con contexto (24/11/2026)
+
+**Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Ventas y Gastos v2»: `VentasEscritorio2`, `VentasMovil2`, `GastosEscritorio2` y `GastosMovil2`. Las cifras de los dibujos son de los datos reales, salvo Cursor de enero a julio (aproximado) y el coste de las suscripciones (en el dibujo, una suposición; aquí manda la regla del punto 6).
+
+**Empieza solo cuando se cumplan las dos cosas:**
+- la fase C (PR #18) está fusionada en `wip/v0`;
+- Vela 0.8.0 está publicada (plan `2026-11-24-vela-0-8-0.md` de `vela-ds`: `BarChart` con `stacked` y `showValues`, `Avatar` con `tone` y `toneFor`, y `Meter`).
+
+Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@0.8.0`. No se toca `lib/calculo.ts`. Sigue valiendo la «Regla técnica: Vela en páginas de servidor».
+
+### Qué cambia con el periodo (regla para las dos páginas)
+
+- **El selector va dentro de la tarjeta principal**, como en «Resultados» de Inicio: `CardHeader` con el título («Facturado» / «Gastado»), el subtítulo del periodo y `Periodo` en `actions` (escritorio); en móvil, debajo del título a todo el ancho.
+- **Cambian con 1T…4T** (solo ese trimestre, como en la fase C): la cifra, el gráfico por mes, Clientes / Por categoría, la lista y la tarjeta del IVA.
+- **No cambian:** en Ventas, «Próxima factura», «Dependencia de un cliente» (siempre el año) y «Cada año»; en Gastos, «Tus suscripciones» y «Lo que ha cambiado» (siempre los últimos meses).
+
+### Datos
+
+1. **Migración `007_ingresos_historicos.sql`:** `alter table presentaciones add column if not exists ingresos_acumulados numeric(12,2)` con el comentario «Facturado de enero al fin del trimestre (130). Para comparar con años anteriores».
+2. **`scripts/historico-ingresos.sql`** (lo ejecuta Jose en el SQL Editor): `update presentaciones set ingresos_acumulados = … where modelo = '130' and anio = … and trimestre = …`, con estos valores (de los justificantes; en 2025 se quita el Kit Digital, 2.000 € desde el 2T, porque no es facturación):
+
+   | | 1T | 2T | 3T | 4T |
+   |---|---|---|---|---|
+   | 2023 | 15.710,31 | 35.562,01 | 45.551,59 | 57.619,45 |
+   | 2024 | 11.244,44 | 30.831,06 | 41.399,05 | 53.734,05 |
+   | 2025 | 9.831,16 | 24.291,49 | 35.803,55 | 44.263,55 |
+
+   Con el `select` de comprobación (12 filas con valor). Y en el mismo script, la unificación de Cursor: `update gastos set proveedor = 'Anysphere, Inc. (Cursor)' where proveedor ilike '%anysphere%' or proveedor ilike 'cursor%';` (hoy está como «Anysphere», «Anysphere, Inc. (Cursor)» y «Cursor»).
+3. **`nombreCorto`:** si el nombre acaba en un paréntesis, devuelve lo de dentro: «Anysphere, Inc. (Cursor)» → «Cursor». Test.
+
+### Funciones (en `lib/`, todas con tests)
+
+4. **`comparativaAnual(libro, historico, hoy)`:** compara de enero al fin del **último trimestre cerrado** del año en curso. Año en curso: suma de las facturas; años anteriores: `ingresos_acumulados` del 130 de ese trimestre. Devuelve los años que haya (hasta 4) y el % frente al año anterior. Sin trimestre cerrado o sin histórico: `null`. Test con los datos reales: hasta el 3T, 26.400 € frente a 35.803,55 € → −26 %.
+5. **`proximaFactura(libro, hoy, paralelo)`:** clientes facturados el mes pasado sin factura en el mes en curso → mes, cliente, importe estimado (lo facturado a ese cliente el mes pasado) y días hasta fin de mes. Sustituye a la fila «Pendiente» de la fase C. Texto según el modo: en paralelo, «La emite Selfconta: mándale el PDF al bot»; si no, «Díselo al bot: «factura a {cliente} …»».
+6. **`suscripciones(gastos, hoy)`:** mismo criterio que `proveedoresQueFaltan` (gasto confirmado en al menos 2 de los 3 meses anteriores; reutiliza `claveProveedor` y saca la parte común a una función, sin duplicar).
+   - **Activas:** coste al mes = lo gastado en el último mes con gasto; total al mes y × 12 al año.
+   - **«Sin factura desde…»:** proveedores que este año fueron recurrentes (gasto en 2 meses seguidos) y no tienen gasto en los 2 últimos meses: el mes del último gasto. Hasta 3, el más reciente primero.
+7. **`cambiosGastos(gastos, hoy)`:** para cada suscripción activa, el último mes cerrado frente a la media de los 3 anteriores: «Sube» o «Baja» si cambia al menos un 50 % y 10 €; «Sin factura» si no tiene gasto en el último mes cerrado. Hasta 3. Test: Cursor 17 → 72 € en octubre es «Sube».
+8. **`dependencia(libro)`:** cliente principal del año y su parte de lo facturado; `riesgo` si ≥ 70 %.
+9. **Colores fijos por categoría** en `lib/categorias.ts` (los del dibujo, como tokens o variables CSS de gráfico), para el gráfico apilado y las barras de «Por categoría».
+
+### Ventas (`/ventas`)
+
+10. **Tarjeta «Facturado»:** cabecera con el periodo; la cifra (`text-display`); «{N} facturas · ≈ X € al mes de media»; con «Año» y si hay comparativa, `Badge` «{x} % más/menos que en {año−1} de enero a {mes}» (verde si sube, amarillo si baja). Separador. `BarChart` por mes con `showValues` en escritorio, el mes en curso `pending` con el importe estimado de `proximaFactura` (si lo hay).
+11. **Escritorio, columna derecha** (en móvil, debajo de la tarjeta principal, en este orden):
+    - «Próxima factura»: tarjeta lila (como el dibujo) con eyebrow «Próxima factura · en {N} días», título «{Mes} · {cliente}», texto con el importe estimado y botón «Abrir el bot» (`target="_blank"`, en un componente de cliente si hace falta).
+    - «Dependencia de un cliente»: la cifra, «de lo que facturas es de {cliente}», `Meter` con umbral 0,7 («70 %»), tono `warning` si hay riesgo (y `Badge` «Riesgo») o `success` si no, y la frase «Si {cliente} se va, se va casi todo. A partir del 70 % lo marcamos como riesgo» (solo con riesgo).
+    - «Clientes»: la barra apilada de siempre y una fila por cliente con `Avatar` (`toneFor`), «{país} · {tipo} · {%}» y la base.
+    - «De enero a {mes}, cada año»: una barra horizontal por año con su importe; el año en curso en lila. Debajo, en `text-caption`: «De tus 130 presentados (2025 sin el Kit Digital)». Sin comparativa, no se pinta.
+12. **Facturas:** escritorio, tabla (Nº, Fecha, Cliente, Tipo con `Badge`, Base, Total) con las 6 más recientes del periodo y «Ver las {N}» (`?todo=1`); móvil, lista (Nº · cliente, fecha · tipo, total). Fuera el `Badge` «sin PDF»: la fila abre el PDF si lo hay.
+
+### Gastos (`/gastos`)
+
+13. **Tarjeta «Gastado»:** cabecera con el periodo; la cifra; «{N} gastos · X € de IVA deducible»; `Badge` «{x} % de lo que facturas» (verde hasta el 20 %, amarillo por encima) y, si es ≤ 20 %, otro gris «Por debajo del 20 %: sano». Separador. `BarChart` `stacked` por categoría y mes, con leyenda y `showValues` en escritorio.
+14. **Escritorio, columna izquierda bajo la tarjeta:** «Lo que ha cambiado» (hasta 3 tarjetas pequeñas: amarilla «Sube», verde «Baja», gris «Sin factura»; si no hay, no se pinta) y la lista por mes de la fase C con `Avatar` (`toneFor`) y el total del mes.
+15. **Escritorio, columna derecha** (en móvil, tras la tarjeta principal: suscripciones, cambios, categorías, lista e IVA):
+    - «Tus suscripciones»: «≈ X € al mes», «{N} suscripciones activas · ≈ Y € al año», una fila por suscripción (`Avatar`, nombre, una pista corta y el coste al mes) y, debajo, «Sin factura desde…» con nombre y mes.
+    - «Por categoría»: como en la fase C, con los colores del punto 9.
+    - IVA: «¿Por qué casi no hay IVA que deducir?», barra de dos partes y «El {x} % de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir».
+
+**Comprueba:**
+- `npm test` (con los tests nuevos de los puntos 3 a 8), `npm run typecheck`, `next build` y `next start` con `curl` y cookie a `/ventas`, `/ventas?periodo=3`, `/gastos`, `/gastos?periodo=3`, `/gastos?categoria=software_ia`, `/` e `/impuestos`, todas en `200`.
+- Prueba de integración de las 56 conversaciones (cambia `nombreCorto`, que usa el aviso de fin de mes del cron).
+- Vista previa a 1440 y 390 px frente a los cuatro dibujos. Con los datos reales: «26 % menos que en 2025 de enero a septiembre»; dependencia 97 % con riesgo; Gastos «7,6 % de lo que facturas»; Cursor sale como «Cursor»; las suscripciones salen de la regla del punto 6.
+
 ## Fase D · Impuestos
 
 **`/impuestos`:**
