@@ -934,6 +934,14 @@ Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@
 - **Punto 7 (mismo porcentaje base):** `pctSobreFacturado` pasa a `base / facturadoBasePeriodo` (antes `(base + iva) / facturadoBasePeriodo`): ahora numerador y denominador son los dos la base, coherente con la cifra grande (`euros(base)`).
 - **`npm test`** (132 tests), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** con cookie a `/`, `/ventas`, `/ventas?periodo=3`, `/gastos`, `/gastos?periodo=3`, `/gastos?categoria=software_ia` e `/impuestos`: las siete dan `200` sin errores en el registro, repetido tras instalar Vela 0.8.1.
 
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-c2`, retoque del orden en móvil de Gastos)
+
+- **Pedido aparte, tras la C.4:** en móvil, «Tus suscripciones» y «Por categoría» tenían que volver a ir justo después de la tarjeta «Gastado» y antes de la lista (el orden de la C.2/C.3), sin que vuelva el hueco de escritorio que arregló el punto 6 de la C.4.
+- **Gastos (`app/(panel)/gastos/page.tsx`):** la rejilla pasa a 3 celdas en vez de 2: la tarjeta (`lg:col-start-1 lg:row-start-1`), el `<aside>` de suscripciones/categorías/IVA (`lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start`, para que ocupe las dos filas de la izquierda sin que su altura dependa de la de la lista) y un bloque nuevo con el `Alert` de borradores, la lista por mes, «Faltan este mes» y el texto final (`lg:col-start-1 lg:row-start-2`). `lg:grid-cols-[minmax(0,1fr)_320px]` pasa a `_340px` (pedido en el mensaje). El orden del DOM es tarjeta → `aside` → bloque de la lista, igual en las dos anchuras: en móvil (`flex-col`) sale tal cual (el orden pedido); en escritorio la rejilla lo recoloca sin tocar el marcado.
+- Comprobado con `curl` contra el HTML servido (cookie de sesión): el orden de las cabeceras en el documento es «Gastado» → «Tus suscripciones» → «Por categoría» → «Por qué casi no hay IVA que deducir» → (lista, «Faltan este mes» si aplica) → el texto ISP, y las clases `lg:col-start-*`/`lg:row-start-*`/`lg:row-span-2`/`lg:self-start` están donde pide el mensaje. No había herramienta de captura de pantalla disponible en esta sesión para comprobarlo visualmente a 390 y 1440 px; lo de arriba es la comprobación estructural equivalente. Pendiente de que Jose lo confirme en la vista previa.
+- `npm test` (132), `npm run typecheck`, `npm run build` y `next start` + `curl` a las siete páginas: sin errores.
+
+
 
 ## Fase D · Impuestos
 

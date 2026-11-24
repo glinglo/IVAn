@@ -123,8 +123,8 @@ export default async function Gastos({
     <div className="flex flex-col gap-8">
       <PageHeader title="Gastos" subtitle={`En qué se va el dinero en ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start">
-        <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-6">
+        <div className="lg:col-start-1 lg:row-start-1">
           <BloqueResultados>
             <Card className="p-4 lg:p-6 gap-5">
               <CardHeader
@@ -158,64 +158,12 @@ export default async function Gastos({
               <GraficoMes meses={mesesGrafico} serie="Gastado" ariaLabel="Gastado por mes" />
             </Card>
           </BloqueResultados>
-
-          {(borr.count ?? 0) > 0 && (
-            <Alert variant="help">
-              {borr.count === 1 ? "1 gasto sin confirmar en el bot." : `${borr.count} gastos sin confirmar en el bot.`}
-            </Alert>
-          )}
-
-          {gastos.length === 0 ? (
-            <p className="text-tertiary">No hay gastos en este periodo. Mándale una foto o un PDF al bot.</p>
-          ) : (
-            meses.map((mes) => {
-              const delMes = gastos.filter((g) => g.fecha.startsWith(mes));
-              const totalMesLista = delMes.reduce((s, g) => s + g.base + g.iva, 0);
-              return (
-                <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(totalMesLista)}>
-                  {delMes.map((g) => {
-                    const fila = (
-                      <ListItem
-                        key={g.id}
-                        title={
-                          <span className="flex items-center gap-2">
-                            <AvatarProveedor nombre={g.proveedor ?? "?"} size="sm" />
-                            {nombreCorto(g.proveedor ?? "?")}
-                          </span>
-                        }
-                        description={`${fechaES(g.fecha)} · ${g.categoria ? ETIQUETA_CATEGORIA[g.categoria] : "Sin categoría"}`}
-                        value={euros(g.base + g.iva)}
-                        badge={{ label: CORTO_IVA[g.tipo] ?? g.tipo, type: "secondary" }}
-                      />
-                    );
-                    return g.archivo_path ? (
-                      <VisorArchivo key={g.id} path={g.archivo_path} titulo={nombreCorto(g.proveedor ?? "?")} fecha={fechaES(g.fecha)} importe={euros(g.base + g.iva)}>
-                        {fila}
-                      </VisorArchivo>
-                    ) : (
-                      fila
-                    );
-                  })}
-                </ListGroup>
-              );
-            })
-          )}
-
-          {faltanEsteMes.length > 0 && (
-            <ListGroup label="Faltan este mes">
-              {faltanEsteMes.map((nombre) => (
-                <ListItem key={nombre} title={nombreCorto(nombre)} description="Suele llegar cada mes" />
-              ))}
-            </ListGroup>
-          )}
-
-          <p className="text-caption text-tertiary">
-            ISP: el proveedor no cobra IVA y te lo autorrepercutes y deduces en el 303 (neto 0). Las cuotas de autónomo y la
-            amortización se suman en el P&L de Inicio.
-          </p>
         </div>
 
-        <aside aria-label="Suscripciones, categorías e IVA" className="flex flex-col gap-4">
+        <aside
+          aria-label="Suscripciones, categorías e IVA"
+          className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:self-start"
+        >
           <Card className="gap-3">
             <h2 className="text-eyebrow text-tertiary">Tus suscripciones</h2>
             {activas.length > 0 ? (
@@ -304,6 +252,63 @@ export default async function Gastos({
             <p className="text-body">El {pct(pctSinDeducir)} de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir.</p>
           </Card>
         </aside>
+
+        <div className="flex flex-col gap-6 lg:col-start-1 lg:row-start-2">
+          {(borr.count ?? 0) > 0 && (
+            <Alert variant="help">
+              {borr.count === 1 ? "1 gasto sin confirmar en el bot." : `${borr.count} gastos sin confirmar en el bot.`}
+            </Alert>
+          )}
+
+          {gastos.length === 0 ? (
+            <p className="text-tertiary">No hay gastos en este periodo. Mándale una foto o un PDF al bot.</p>
+          ) : (
+            meses.map((mes) => {
+              const delMes = gastos.filter((g) => g.fecha.startsWith(mes));
+              const totalMesLista = delMes.reduce((s, g) => s + g.base + g.iva, 0);
+              return (
+                <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(totalMesLista)}>
+                  {delMes.map((g) => {
+                    const fila = (
+                      <ListItem
+                        key={g.id}
+                        title={
+                          <span className="flex items-center gap-2">
+                            <AvatarProveedor nombre={g.proveedor ?? "?"} size="sm" />
+                            {nombreCorto(g.proveedor ?? "?")}
+                          </span>
+                        }
+                        description={`${fechaES(g.fecha)} · ${g.categoria ? ETIQUETA_CATEGORIA[g.categoria] : "Sin categoría"}`}
+                        value={euros(g.base + g.iva)}
+                        badge={{ label: CORTO_IVA[g.tipo] ?? g.tipo, type: "secondary" }}
+                      />
+                    );
+                    return g.archivo_path ? (
+                      <VisorArchivo key={g.id} path={g.archivo_path} titulo={nombreCorto(g.proveedor ?? "?")} fecha={fechaES(g.fecha)} importe={euros(g.base + g.iva)}>
+                        {fila}
+                      </VisorArchivo>
+                    ) : (
+                      fila
+                    );
+                  })}
+                </ListGroup>
+              );
+            })
+          )}
+
+          {faltanEsteMes.length > 0 && (
+            <ListGroup label="Faltan este mes">
+              {faltanEsteMes.map((nombre) => (
+                <ListItem key={nombre} title={nombreCorto(nombre)} description="Suele llegar cada mes" />
+              ))}
+            </ListGroup>
+          )}
+
+          <p className="text-caption text-tertiary">
+            ISP: el proveedor no cobra IVA y te lo autorrepercutes y deduces en el 303 (neto 0). Las cuotas de autónomo y la
+            amortización se suman en el P&L de Inicio.
+          </p>
+        </div>
       </div>
     </div>
   );
