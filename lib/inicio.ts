@@ -42,6 +42,7 @@ function diaFin(mes: string): string {
 
 export interface FilaCascada {
   label: string;
+  labelCorta: string;
   value: number;
   kind: "total" | "minus" | "result";
 }
@@ -49,12 +50,12 @@ export interface FilaCascada {
 /** Filas de la cascada «de lo facturado al rendimiento», a partir del resultado de `pyg`. */
 export function cascada(p: ReturnType<typeof pyg>): FilaCascada[] {
   return [
-    { label: "Ingresos", value: p.ingresos, kind: "total" },
-    { label: "Gastos con factura", value: p.gastosFacturas, kind: "minus" },
-    { label: "Cuota de autónomo", value: p.seguridadSocial, kind: "minus" },
-    { label: "Amortización", value: p.amortizaciones, kind: "minus" },
-    { label: "Difícil justificación (5 %)", value: p.dificilJustificacion, kind: "minus" },
-    { label: "Rendimiento neto", value: p.rendimientoNeto, kind: "result" },
+    { label: "Ingresos", labelCorta: "Ingresos", value: p.ingresos, kind: "total" },
+    { label: "Gastos con factura", labelCorta: "Gastos con factura", value: p.gastosFacturas, kind: "minus" },
+    { label: "Cuota de autónomo", labelCorta: "Cuota de autónomo", value: p.seguridadSocial, kind: "minus" },
+    { label: "Amortización", labelCorta: "Amortización", value: p.amortizaciones, kind: "minus" },
+    { label: "Difícil justificación (5 %)", labelCorta: "5 % difícil justif.", value: p.dificilJustificacion, kind: "minus" },
+    { label: "Rendimiento neto", labelCorta: "Rendimiento neto", value: p.rendimientoNeto, kind: "result" },
   ];
 }
 

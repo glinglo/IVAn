@@ -144,6 +144,16 @@ export interface Paso {
   texto: string;
   detalle?: string;
   href?: string;
+  /** Días hasta el inicio del plazo (sin abrir) o hasta el final (abierto). */
+  dias?: number;
+}
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+
+/** Texto de «cuándo» a partir de `dias`, para el eyebrow de una tarjeta y el badge del drawer. */
+export function cuandoPaso(p: Paso): string | null {
+  if (p.dias === undefined) return null;
+  return p.clave === "plazo" && p.detalle?.startsWith("Quedan") ? `Quedan ${p.dias} días` : `En ${p.dias} días`;
 }
 
 export interface ContextoPasos {
@@ -176,22 +186,21 @@ export function siguientesPasos(c: ContextoPasos): Paso[] {
     if (!faltan.length) continue;
     const quedan = diasEntre(c.hoy, plazo.fin);
     const abierto = c.hoy >= plazo.apertura;
+    const diasHastaApertura = diasEntre(c.hoy, plazo.apertura);
     pasos.push({
       nivel: abierto && quedan <= 10 ? "urgente" : abierto ? "pendiente" : "info",
       clave: "plazo",
-      texto: abierto
-        ? `Presentar ${faltan.join(", ")} del ${plazo.t}T ${plazo.anio}`
-        : `Próximo trimestral: ${plazo.t}T ${plazo.anio}`,
-      detalle: abierto
-        ? `Quedan ${quedan} días (hasta el ${plazo.fin.split("-").reverse().join("/")})`
-        : `Se presenta del ${plazo.apertura.split("-").reverse().join("/")} al ${plazo.fin.split("-").reverse().join("/")}`,
+      texto: abierto ? `Presentar ${faltan.join(", ")} del ${plazo.t}T ${plazo.anio}` : `Presentar el ${plazo.t}T de ${plazo.anio}`,
+      detalle: abierto ? `Quedan ${quedan} días (hasta el ${plazo.fin.split("-").reverse().join("/")})` : `Del ${ddmm(plazo.apertura)} al ${ddmm(plazo.fin)}`,
       href: `/impuestos/${plazo.anio}/${plazo.t}`,
+      dias: abierto ? quedan : diasHastaApertura,
     });
     break;
   }
 
   if (c.gastosPorConfirmar > 0) {
-    pasos.push({ nivel: "pendiente", clave: "gastos", texto: `${c.gastosPorConfirmar} gasto(s) sin confirmar`, detalle: "Confírmalos en el bot" });
+    const texto = c.gastosPorConfirmar === 1 ? "1 gasto sin confirmar" : `${c.gastosPorConfirmar} gastos sin confirmar`;
+    pasos.push({ nivel: "pendiente", clave: "gastos", texto, detalle: "Confírmalos en el bot" });
   }
 
   // Facturación del mes: clientes facturados el mes pasado que aún no tienen factura este mes.
