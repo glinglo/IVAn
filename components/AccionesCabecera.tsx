@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Dropdown, Menu } from "@glinglo/vela-ds";
+import { Dropdown, Menu, AvatarButton, Avatar } from "@glinglo/vela-ds";
 import { menuCuenta } from "./menuCuenta";
 
 export function AccionesCabecera({ anio, anioActual }: { anio?: number; anioActual?: number }) {
@@ -25,25 +25,9 @@ export function AccionesCabecera({ anio, anioActual }: { anio?: number; anioActu
       )}
       <Menu
         trigger={
-          <button
-            type="button"
-            aria-label="Menú de cuenta"
-            className="lg:hidden"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "var(--color-brand-100)",
-              color: "var(--color-brand-800)",
-              fontWeight: 500,
-              border: "none",
-            }}
-          >
-            J
-          </button>
+          <AvatarButton size="md" aria-label="Menú de cuenta" className="lg:hidden">
+            <Avatar initials="J" size="md" />
+          </AvatarButton>
         }
         items={menuCuenta}
         placement="bottom-end"
