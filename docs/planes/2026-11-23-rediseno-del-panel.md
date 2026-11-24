@@ -655,10 +655,30 @@ Rama nueva, `plan/rediseno-b2`, desde `wip/v0`. No se toca `lib/calculo.ts`.
 
 **`/impuestos/[anio]/390`:** el contenido actual de `/anual/[anio]` con el mismo patrón (`PageHeader`, tarjetas, `CopyValue`, enlace compensar/devolver).
 
+### Años anteriores a IVAn (añadido el 24/11/2026)
+
+El 24/11 se cargaron en `presentaciones` los 303 y 130 de 2023, 2024 y 2025 (los presentó la gestoría; el detalle de casillas está en la hoja, pestañas «Histórico 303» e «Histórico 130»). De esos años IVAn no tiene facturas ni gastos, así que hoy el panel enseña los trimestres como «presentado» pero con IVA e IRPF a 0,00 € (calcula sobre datos que no tiene), y el selector de año solo llega a 2024. Jose quiere ver ese histórico en el panel.
+
+- **Año con datos o sin datos:** `sinDatos = libro.facturas.length === 0 && libro.gastos.length === 0`. Función en `lib/libro.ts`, con test.
+- **Selector de año de Impuestos** (`/impuestos`, `/impuestos/[anio]/[t]`): del primer año que tenga algo en `presentaciones` (hoy 2023) hasta el actual, el más reciente primero. `cargarAniosConPresentaciones()` en `lib/libro.ts` (un `select distinct anio`). En Inicio, Ventas y Gastos el selector solo ofrece los años con facturas o gastos en IVAn (hoy, solo 2026), para no enseñar pantallas a cero.
+- **`/impuestos?anio=X` con `sinDatos`:**
+  - Sin la tarjeta del trimestre abierto.
+  - «Presentados» igual que en un año con datos: un `ListItem` por trimestre con la fecha y los importes de `presentaciones`. El 303 negativo se muestra como «−26,10 € a compensar»; el 0 como «resultado cero»; el positivo como «ingresado».
+  - «Pagado en {año}»: suma del 130 [19] y de los 303 positivos.
+  - Una línea gris: «Presentado por la gestoría. IVAn no tiene las facturas de este año, así que solo muestra lo presentado».
+  - Sin enlace al 390 (no hay datos para calcularlo).
+- **`/impuestos/[anio]/[t]` con `sinDatos`:** sin casillas calculadas ni `CopyValue`. Solo la tarjeta del resultado presentado (303 [71] y 130 [19], con la fecha) y la misma línea gris. Si el trimestre no está en `presentaciones`: «No hay datos de este trimestre».
+- **`/impuestos/[anio]/390` con `sinDatos`:** `notFound()` o la línea gris; nada a cero.
+- **Opcional, si cabe sin complicar la fase:** en `/impuestos`, abajo, «Histórico»: una fila por año (de `presentaciones`) con el 130 pagado y el 303 ingresado. Valores de referencia para el test: 2023 → 10.172,20 € y 0 €; 2024 → 8.816,37 € y 1.116,84 €; 2025 → 7.202,05 € y 0 €.
+
 **Comprueba:**
 - Test de `formatoSede`.
 - Con los datos reales: 4T 2026 con el 130 a 0 €; 1T con 1.503,78 € presentado frente a 1.216,02 € de IVAn.
 - Copiar una casilla en el móvil.
+- Tests de `sinDatos` y de `cargarAniosConPresentaciones`.
+- `/impuestos?anio=2025`: los 4 trimestres presentados con −26,10 / −274,60 / −376,67 / −75,60 € (303) y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56 € (130); «Pagado en 2025» = 7.202,05 €; ningún 0,00 € calculado.
+- `/impuestos?anio=2023` y `/impuestos/2023/1` dan `200`; `/impuestos/2023/390` no enseña casillas a cero.
+- El selector de Impuestos ofrece 2026, 2025, 2024 y 2023; el de Inicio, Ventas y Gastos, solo 2026.
 
 ## Fase E · Segundo nivel y limpieza
 
