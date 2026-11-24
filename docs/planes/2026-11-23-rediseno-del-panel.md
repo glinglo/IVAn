@@ -416,6 +416,35 @@ Reescribir `app/(panel)/page.tsx`. Sigue siendo de servidor y solo pasa datos.
 - **Cifra real a hoy (24/11/2026):** rendimiento neto de `/` = **20.572,12 €**, igual que el que da `pyg(libro.datos, hoy)` (no escrito a mano). Está en el entorno de los ~20.600 € que estimaba el plan.
 - Sin vista previa de Vercel disponible en esta sesión (sin acceso al navegador): la comprobación visual de la franja/tarjeta, el drawer «Por hacer», la cascada y las barras con los tokens de marca queda pendiente de que Jose la revise en el despliegue de la rama.
 
+### Correcciones de la revisión (Claude, 24/11/2026)
+
+Se hacen en la misma rama `plan/rediseno-b`, **antes de fusionar el PR #11**. Siguen con Vela 0.5.0.
+
+1. **La tarjeta grande no debe esconder la franja.**
+   - **El fallo:** hoy `AvisosInicio` devuelve solo la `NoticeCard` cuando hay destacado. Del día 28 en adelante, o con un plazo urgente, el resto de cosas por hacer desaparece de Inicio.
+   - **El arreglo:**
+     - **Tarjeta:** se pinta si hay `destacado` y no está oculto.
+     - **Franja:** se pinta debajo si la lista para la franja no está vacía. La lista es `resto`, más el `destacado` al principio si el usuario lo ha ocultado. Ocultar la tarjeta no borra la tarea: pasa a la franja y al drawer.
+     - **«Todo al día»:** solo si no hay destacado y `resto` está vacío.
+   - **Tests:** añadir a `tests/inicio.test.ts`, o en una función pura nueva `avisosVisibles({ destacado, resto, oculto })` en `lib/inicio.ts`, los casos:
+     - destacado visible con resto → tarjeta y franja con el resto;
+     - destacado oculto → sin tarjeta y franja con el destacado primero;
+     - sin nada → «Todo al día».
+2. **El escritorio está limitado a 560 px.**
+   - **El fallo:** el `main` lleva la clase antigua `.app` (`max-width: 560px`), así que en escritorio la fila «rendimiento (1/3) + cascada (2/3)» deja la tarjeta del rendimiento en unos 180 px.
+   - **El arreglo:** en `app/(panel)/layout.tsx`, añadir `lg:max-w-5xl` (1024 px) a la `className` del `main`. Es el **único** cambio permitido en el layout en esta fase. Las utilidades ganan a `.app` desde la fase A.4. Las páginas aún sin rediseñar se verán más anchas en escritorio: es aceptable hasta las fases C y D.
+3. **En móvil, las tarjetas tienen que ir siempre una debajo de otra.**
+   - **El fallo:** con `flex-wrap` y sin `basis`, en anchos intermedios (una tablet, por ejemplo) dos tarjetas estrechas pueden quedar lado a lado.
+   - **El arreglo:** las cuatro `Card` de Inicio llevan `basis-full` y su `lg:basis-…` actual.
+4. **Un `?periodo=` futuro.** Si llega por URL un trimestre que aún no ha empezado (p. ej. `?periodo=4` en septiembre), `hasta` no puede pasar de hoy: limitarlo con `min(hasta, hoy)` cuando el año es el actual.
+
+**Comprueba:**
+- `npm test` con los casos nuevos, `npm run typecheck`, `next build` y `next start` con todas las páginas en 200 (incluida `/?periodo=4` en el año actual).
+- Con un `hoy` simulado al 28/11 en un test: tarjeta y franja a la vez.
+- **Vista previa:**
+  - a 1440 px, las filas de escritorio con la tarjeta del rendimiento a un tercio de ~1.000 px;
+  - a 390 px, todo en una columna.
+
 ## Fase B.1 · Estructura con Vela 0.6.0 (24/11/2026)
 
 **Empieza solo cuando se cumplan las dos cosas:**
@@ -429,7 +458,7 @@ Va en una rama nueva, `plan/rediseno-b1`, desde `wip/v0`. Así no choca con la B
    - sustituir el `div` con `display: flex` y el `main` con márgenes a mano por `AppShell`;
    - `sidebar={<Suspense fallback={null}><NavEscritorio …/></Suspense>}`;
    - `tabBar={<Suspense fallback={null}><NavMovil …/></Suspense>}`;
-   - `mainClassName="app"`.
+   - `mainClassName="app lg:max-w-5xl"` (el ancho de escritorio de las correcciones de la fase B).
 
    Se mantienen la sesión, la cookie de la barra y el aviso del trimestre tal cual.
 3. **`components/PanelNav.tsx`:**
@@ -437,11 +466,12 @@ Va en una rama nueva, `plan/rediseno-b1`, desde `wip/v0`. Así no choca con la B
    - quitar de `NavMovil` el `div` `fixed inset-x-0 bottom-0 z-40 lg:hidden`.
 
    Todo eso lo hace ya `AppShell`.
-4. **`components/AccionesCabecera.tsx`:** el botón con estilos en línea pasa a ser `<AvatarButton initials="J" size="md" aria-label="Menú de cuenta" className="lg:hidden" />` como disparador del `Menu`.
-5. **Configuración (`app/(panel)/ajustes/page.tsx`):** el pie pasa del `<section className="card"><a>…` a `NoticeStrip` **sin `count`** («Para cambiar algo, díselo al bot» · «/ajustes») con `href` al bot.
+4. **`components/AccionesCabecera.tsx`:** el botón con estilos en línea pasa a ser `<AvatarButton size="md" aria-label="Menú de cuenta" className="lg:hidden"><Avatar initials="J" size="md" /></AvatarButton>` como disparador del `Menu`. En Vela 0.6.0, `AvatarButton` recibe el `Avatar` como hijo.
+5. **`NoticeCard` del bot en otra pestaña:** si Vela 0.6.0 trae `action.target`, el aviso sin `href` propio abre el bot con `target: "_blank"`.
+6. **Configuración (`app/(panel)/ajustes/page.tsx`):** el pie pasa del `<section className="card"><a>…` a `NoticeStrip` **sin `count`** («Para cambiar algo, díselo al bot» · «/ajustes») con `href` al bot.
 
    `NoticeStrip` con `href` no lleva función, así que vale en una página de servidor. Si necesita `target="_blank"` y la franja no lo admite, para y apúntalo.
-6. **Inicio, «Todo al día»:** la línea de texto de `AvisosInicio` pasa a `NoticeStrip` sin `count`, sin `href` ni `onClick`.
+7. **Inicio, «Todo al día»:** la línea de texto de `AvisosInicio` pasa a `NoticeStrip` sin `count`, sin `href` ni `onClick`.
 
 **Comprueba:**
 - `npm test`, `npm run typecheck`, `next build` y `next start` con todas las páginas en 200.
