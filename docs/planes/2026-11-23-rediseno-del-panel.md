@@ -943,29 +943,68 @@ Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@
 
 
 
-## Fase D · Impuestos
+## Fase D · Impuestos (reescrita el 24/11/2026)
 
-**`/impuestos`:**
-1. Tarjeta del trimestre abierto o próximo (fondo brand-200, radio 16):
-   - días que quedan, plazo y fecha de domiciliación (`plazoTrimestral`);
-   - 303 [71] y 130 a ingresar previstos;
-   - «Preparar el {t}T» → `/impuestos/{año}/{t}`;
-   - `Badge` «provisional» si el trimestre no ha terminado.
-2. «Presentados»: un `ListItem` por trimestre presentado, con la fecha y los importes **de `presentaciones`** y `Badge` «presentado».
-3. «Resumen anual»: 390 → `/impuestos/{año}/390`, y una línea informativa del 349.
-4. «Pagado en {año}»: IRPF a cuenta y IVA ingresado, de `presentaciones`.
+**Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Impuestos v2 (fase D)»: `ImpuestosEscritorio2` (`/impuestos`) y `TrimestreEscritorio2` (`/impuestos/2026/4`, modelo 130). En móvil, los dibujos `Impuestos` y `Trimestre` del 23/11 con los patrones de las fases B.3–C.4: las pestañas dentro de la tarjeta principal, los `Badge` debajo de la cifra, espacios de no separación en «€» y «%».
 
-**`/impuestos/[anio]/[t]`:**
-- `PageHeader` con «‹ Impuestos».
-- `SegmentedControl` en modo `tabs`: 303 · 130 · 349 (`?m=`).
-- Tarjeta «A ingresar · casilla [x]» (`text-display`) con una frase de por qué. Ejemplo del 130 a 0: «Lo pagado de 1T a 3T ya cubre el 20 % de tu rendimiento del año».
-- Si el modelo está presentado y el importe no coincide con IVAn: las dos cifras y el motivo conocido (cuota de autónomo en el 130 de la gestoría). Es la base visual del aviso B2 del plan del cierre; aquí solo se muestra.
-- **Casillas con `CopyValue`:** todas las de hoy, las que están a 0 en gris.
-  - El formato que se copia es el de la Sede: sin separador de miles y con coma decimal (`1216,02`; los negativos con `-`). Función `formatoSede(n)`, con test.
-- «Cómo presentarlo»: lista de 4 pasos (Sede → modelo → copiar casillas → decírselo al bot).
-- El 349 sigue como lista (clave, nombre, VAT, base).
+Rama `plan/rediseno-d` desde `wip/v0` (Vela 0.9.0). No se toca `lib/calculo.ts`. Sigue valiendo la «Regla técnica: Vela en páginas de servidor» y sus añadidos (`toneFor`, nada de render-props desde la página).
 
-**`/impuestos/[anio]/390`:** el contenido actual de `/anual/[anio]` con el mismo patrón (`PageHeader`, tarjetas, `CopyValue`, enlace compensar/devolver).
+### Datos
+
+1. **Migración `008_casillas_presentadas.sql`:** `alter table presentaciones add column if not exists casillas jsonb` («Casillas clave tal como se presentaron: para el 303, 110, 78, 87 y 71»).
+2. **`scripts/historico-casillas.sql`** (lo ejecuta Jose): `update presentaciones set casillas = '{"110": …, "78": …, "87": …, "71": …}' where modelo = '303' and anio = … and trimestre = …`, con el `select` de comprobación (15 filas con casillas). Valores, de los justificantes (todo negativo quedó «a compensar»):
+
+   | 303 | [110] | [78] | [87] | [71] |
+   |---|---|---|---|---|
+   | 2023 1T | 459,04 | 0 | 459,04 | −32,38 |
+   | 2023 2T | 491,42 | 0 | 491,42 | −56,44 |
+   | 2023 3T | 547,86 | 0 | 547,86 | −3,27 |
+   | 2023 4T | 551,13 | 0 | 551,13 | −26,10 |
+   | 2024 1T | 577,23 | 0 | 577,23 | −89,50 |
+   | 2024 2T | 666,73 | 462,21 | 204,52 | 0,00 |
+   | 2024 3T | 204,52 | 204,52 | 0 | 471,87 |
+   | 2024 4T | 0 | 0 | 0 | 644,97 |
+   | 2025 1T | 0 | 0 | 0 | −26,10 |
+   | 2025 2T | 26,10 | 0 | 26,10 | −274,60 |
+   | 2025 3T | 300,70 | 0 | 300,70 | −376,67 |
+   | 2025 4T | 679,93 | 0 | 679,93 | −75,60 |
+   | 2026 1T | 755,53 | 0 | 755,53 | −2,42 |
+   | 2026 2T | 2,42 | 0 | 2,42 | −0,42 |
+   | 2026 3T | 2,84 | 2,84 | 0 | 207,46 |
+
+   Solo se muestran; **no entran en ningún cálculo** de IVAn (eso es la B3 del plan del cierre, en diciembre).
+
+### Funciones (en `lib/`, todas con tests)
+
+3. **`formatoSede(n)`:** sin separador de miles y con coma decimal (`1216,02`; negativos con `-`).
+4. **`sinDatos(libro)`** y **`cargarAniosConPresentaciones()`**, como decía el apartado «Años anteriores a IVAn» (abajo).
+5. **`saldoIvaCompensar(presentaciones303)`:** recorre los 303 en orden; el [110] esperado de cada trimestre es el [87] del anterior más lo que dejó «a compensar» (−[71] si fue negativo). Si un [110] presentado es **menor** que el esperado, devuelve el trimestre y lo que falta. Test con los datos reales: 2T 2026, esperado 757,95 €, presentado 2,42 € → faltan 755,53 €. El 4T 2025 trae 2,56 € de más (sin explicar, a favor de Jose): eso no se avisa; solo se avisa lo que falta.
+6. **Frases del porqué** (`lib/impuestos.ts` o donde encaje), con tests:
+   - 303: 0 → «Lo que cobras de IVA y lo que deduces se compensan»; > 0 → «IVA cobrado menos el deducible»; < 0 → «Te sale a favor: queda para compensar».
+   - 130: [07] ≤ 0 → «Lo pagado de 1T a 3T ya cubre el 20 % de tu rendimiento del año» (en el 1T: «Tus gastos superan…»); > 0 → «20 % del rendimiento menos lo ya pagado y las retenciones».
+
+### `/impuestos`
+
+7. **Tarjeta «Próximo»** (lila, radio 16; roja como la tarjeta urgente de Inicio si quedan ≤ 10 días de plazo): eyebrow «Próximo · en {N} días» (o «Quedan {N} días» con el plazo abierto, con `cuandoPaso`), título «{t}T de {año}», plazo y domiciliación (`plazoTrimestral`), las dos cifras previstas de IVAn (303 [71] y 130 [19]) con su frase, `Badge` «Provisional» si el trimestre no ha terminado, botón «Preparar el {t}T» y, en el 4T, «También 349 y 390».
+8. **«Presentados en {año}»:** escritorio, tabla (Trimestre con enlace, Presentado, 303 con `Badge` «Ingresado» / «A compensar» / «Resultado cero», 130, `Badge` «Presentado»); móvil, lista. Debajo, en `text-caption`, «El 130 de la gestoría no incluía tu cuota de autónomo como gasto; por eso IVAn calcula otra cifra», **solo** si algún 130 presentado difiere de IVAn.
+9. **Columna derecha** (en móvil, tras «Presentados»):
+   - **Aviso del saldo** (amarillo), si `saldoIvaCompensar` encuentra algo: «A revisar en el cierre · {X} € de IVA a tu favor · La gestoría no los arrastró en el 303 del {t}T. Decidimos en enero si se compensan en el 4T o pides la devolución.»
+   - **«Pagado en {año}»:** total; «IRPF a cuenta X · IVA Y»; `BarChart` `stacked` por trimestre (IRPF + IVA ingresado), con el trimestre en curso `pending`.
+   - **«Lo pagado cada año»:** una barra por año de `presentaciones` (130 [19] + 303 positivos), el año en curso en lila con «hasta {t}T».
+   - **«Resumen anual»:** filas al 390 y al 349 con su pista.
+10. **Años sin datos** (`sinDatos`): como el apartado de abajo; además, sin aviso del saldo si no hay casillas y con «Lo pagado cada año» igual.
+
+### `/impuestos/[anio]/[t]`
+
+11. **Cabecera:** «‹ Impuestos», `h1` «{t}T de {año}» y el plazo como subtítulo.
+12. **Tarjeta principal:** título «Modelo {m} · {IVA|IRPF|UE}» y subtítulo; las pestañas 303 · 130 · 349 (`SegmentedControl` en modo pestañas, `?m=`) en la cabecera de la tarjeta, como el periodo de Inicio; «A ingresar · casilla [x]» en grande con su frase; a la derecha los `Badge` («Provisional» o «Presentado el dd/mm»; en el 130, «Cuota de autónomo incluida»). Si está presentado y no coincide con IVAn: «Presentado X € · IVAn calcula Y €» y el motivo conocido.
+13. **Casillas:** rejilla de 2 columnas (1 en móvil); cada una con su número, nombre, importe y `CopyValue` (copia `formatoSede`); a 0 en gris; resaltadas la 07 y la 19 (130) y la 71 (303). En el 303, también [110], [78] y [87] (de lo calculado; si el trimestre está presentado y hay `casillas`, las presentadas). El 349, como lista (clave, nombre, VAT, base).
+14. **Columna derecha:** «Plazo» (lila: días, fechas, domiciliación, avisos del bot); «Cómo presentarlo» (4 pasos según el modelo y «Abrir la Sede», `target="_blank"`); «Este trimestre también» (los otros modelos con su estado).
+15. **Años sin datos:** solo el resultado presentado (303 [71] y 130 [19], con la fecha) y la línea gris.
+
+### `/impuestos/[anio]/390`
+
+16. Mismo patrón: cabecera con «‹ Impuestos», tarjeta con las casillas en rejilla con `CopyValue`, y el enlace compensar/devolver. Sin datos: la línea gris, nada a cero.
 
 ### Años anteriores a IVAn (añadido el 24/11/2026)
 
@@ -984,13 +1023,12 @@ El 24/11 se cargaron en `presentaciones` los 303 y 130 de 2023, 2024 y 2025 (los
 - **Opcional, si cabe sin complicar la fase:** en `/impuestos`, abajo, «Histórico»: una fila por año (de `presentaciones`) con el 130 pagado y el 303 ingresado. Valores de referencia para el test: 2023 → 10.172,20 € y 0 €; 2024 → 8.816,37 € y 1.116,84 €; 2025 → 7.202,05 € y 0 €.
 
 **Comprueba:**
-- Test de `formatoSede`.
-- Con los datos reales: 4T 2026 con el 130 a 0 €; 1T con 1.503,78 € presentado frente a 1.216,02 € de IVAn.
-- Copiar una casilla en el móvil.
-- Tests de `sinDatos` y de `cargarAniosConPresentaciones`.
-- `/impuestos?anio=2025`: los 4 trimestres presentados con −26,10 / −274,60 / −376,67 / −75,60 € (303) y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56 € (130); «Pagado en 2025» = 7.202,05 €; ningún 0,00 € calculado.
-- `/impuestos?anio=2023` y `/impuestos/2023/1` dan `200`; `/impuestos/2023/390` no enseña casillas a cero.
+- `npm test` (con `formatoSede`, `sinDatos`, `cargarAniosConPresentaciones`, `saldoIvaCompensar` y las frases), `npm run typecheck`, `next build` y `next start` con `curl` y cookie a `/impuestos`, `/impuestos?anio=2025`, `/impuestos?anio=2023`, `/impuestos/2026/3`, `/impuestos/2026/4?m=130`, `/impuestos/2026/4?m=349`, `/impuestos/2023/1` y `/impuestos/2026/390`, todas en `200`.
+- Prueba de integración de las 56 conversaciones (cambian enlaces y textos que usa el bot, como `/panel` a un trimestre).
+- Con los datos reales: «Pagado en 2026» = 4.640,92 € (IRPF 4.433,46 · IVA 207,46); aviso de 755,53 €; 4T con 303 y 130 a 0 €; 1T con 1.503,78 € presentado frente a 1.216,02 € de IVAn; `/impuestos?anio=2025` con los 4 trimestres (−26,10 / −274,60 / −376,67 / −75,60 y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56) y «Pagado en 2025» = 7.202,05 €, sin ningún 0,00 € calculado.
+- Copiar una casilla en el móvil pega `4433,46`.
 - El selector de Impuestos ofrece 2026, 2025, 2024 y 2023; el de Inicio, Ventas y Gastos, solo 2026.
+- Vista previa a 1440 y 390 px frente a los dibujos.
 
 ## Fase E · Segundo nivel y limpieza
 
