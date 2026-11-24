@@ -2,7 +2,7 @@
 // de impuestos y cuota. Funciones puras: usan `pyg` y `meses` de `lib/calculo.ts` sin modificarlo.
 
 import type { Libro, Paso } from "./libro";
-import { meses, modelo130, pyg } from "./calculo";
+import { meses, modelo130, pyg, type PyG } from "./calculo";
 import { rangoTrimestre, round2 } from "./fiscal";
 
 export interface MesSerie {
@@ -34,6 +34,22 @@ export function seriesMensuales(libro: Libro, hasta: string, hoy: string): MesSe
   return out;
 }
 
+/** `pyg` de un solo trimestre: la diferencia entre el acumulado a su fin (o a `hasta`, si está en
+ * curso) y el acumulado al fin del trimestre anterior. Para el 1T no hay nada que restar. */
+export function pygTrimestre(libro: Libro, anio: number, t: number, hasta: string): PyG {
+  const rango = rangoTrimestre(anio, t);
+  const fin = rango.hasta < hasta ? rango.hasta : hasta;
+  const actual = pyg(libro.datos, fin);
+  if (t <= 1) return { ...actual, desde: rango.desde };
+  const anterior = pyg(libro.datos, rangoTrimestre(anio, t - 1).hasta);
+  const out = { ...actual, desde: rango.desde };
+  for (const k of Object.keys(actual) as (keyof PyG)[]) {
+    if (k === "desde" || k === "hasta") continue;
+    (out[k] as number) = round2((actual[k] as number) - (anterior[k] as number));
+  }
+  return out;
+}
+
 /** "2026-03" → "2026-03-31" */
 function diaFin(mes: string): string {
   const [y, m] = mes.split("-").map(Number);
@@ -42,6 +58,7 @@ function diaFin(mes: string): string {
 
 export interface FilaCascada {
   label: string;
+  labelCorta: string;
   value: number;
   kind: "total" | "minus" | "result";
 }
@@ -49,12 +66,12 @@ export interface FilaCascada {
 /** Filas de la cascada «de lo facturado al rendimiento», a partir del resultado de `pyg`. */
 export function cascada(p: ReturnType<typeof pyg>): FilaCascada[] {
   return [
-    { label: "Ingresos", value: p.ingresos, kind: "total" },
-    { label: "Gastos con factura", value: p.gastosFacturas, kind: "minus" },
-    { label: "Cuota de autónomo", value: p.seguridadSocial, kind: "minus" },
-    { label: "Amortización", value: p.amortizaciones, kind: "minus" },
-    { label: "Difícil justificación (5 %)", value: p.dificilJustificacion, kind: "minus" },
-    { label: "Rendimiento neto", value: p.rendimientoNeto, kind: "result" },
+    { label: "Ingresos", labelCorta: "Ingresos", value: p.ingresos, kind: "total" },
+    { label: "Gastos con factura", labelCorta: "Gastos con factura", value: p.gastosFacturas, kind: "minus" },
+    { label: "Cuota de autónomo", labelCorta: "Cuota de autónomo", value: p.seguridadSocial, kind: "minus" },
+    { label: "Amortización", labelCorta: "Amortización", value: p.amortizaciones, kind: "minus" },
+    { label: "Difícil justificación (5 %)", labelCorta: "5 % difícil justif.", value: p.dificilJustificacion, kind: "minus" },
+    { label: "Rendimiento neto", labelCorta: "Rendimiento neto", value: p.rendimientoNeto, kind: "result" },
   ];
 }
 

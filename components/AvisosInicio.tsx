@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Badge, Button, NoticeCard, NoticeStrip, Sheet } from "@glinglo/vela-ds";
-import type { Paso } from "@/lib/libro";
+import { cuandoPaso, type Paso } from "@/lib/libro";
 import { avisosVisibles } from "@/lib/inicio";
 
 const BOT_URL = "https://t.me/Ivanelgestorbot";
@@ -12,6 +12,12 @@ const BADGE: Record<Paso["nivel"], { label: string; type: "destructive" | "onhol
   pendiente: { label: "Pendiente", type: "onhold" },
   info: null,
 };
+
+function badgePaso(p: Paso): { label: string; type: "destructive" | "onhold" } | null {
+  const cuando = cuandoPaso(p);
+  if (cuando) return { label: cuando, type: p.nivel === "urgente" ? "destructive" : "onhold" };
+  return BADGE[p.nivel];
+}
 
 function escribirCookieOculta(clave: string, hoy: string) {
   document.cookie = `ivan_aviso_oculto=${clave}:${hoy}; max-age=${60 * 60 * 24}; path=/; SameSite=Lax`;
@@ -52,7 +58,7 @@ export function AvisosInicio({ destacado, resto, ocultoHoy, hoy }: { destacado: 
           />
           <Sheet open={abierto} title="Por hacer" onClose={() => setAbierto(false)}>
           {franja.map((p, i) => {
-            const badge = BADGE[p.nivel];
+            const badge = badgePaso(p);
             return (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "12px 0" }}>
                 <div>

@@ -93,7 +93,7 @@ export default async function Ajustes() {
         ))}
       </ListGroup>
 
-      <NoticeStrip title="Para cambiar algo, díselo al bot" subtitle="/ajustes" href={BOT_URL} />
+      <NoticeStrip title="Para cambiar algo, díselo al bot" subtitle="/ajustes" href={BOT_URL} target="_blank" />
     </>
   );
 }

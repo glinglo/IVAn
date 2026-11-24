@@ -218,9 +218,14 @@ export function mesAnterior(mes: string): string {
   return sumarDias(`${mes}-01`, -1).slice(0, 7);
 }
 
-/** 3060.5 → "3.060,50 €" (sin espacios especiales, para que el PDF lo pueda pintar). */
+/** 3060.5 → "3.060,50 €" (espacio de no separación: el € no se parte de su cifra). */
 export function euros(n: number): string {
   const [ent, dec] = Math.abs(round2(n)).toFixed(2).split(".");
   const conPuntos = ent.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `${n < 0 ? "-" : ""}${conPuntos},${dec} €`;
+  return `${n < 0 ? "-" : ""}${conPuntos},${dec} €`;
+}
+
+/** `euros` sin céntimos: "3.060,50 €" → "3.060 €". */
+export function eurosSinCentimos(n: number): string {
+  return euros(n).replace(/,\d\d €/, " €");
 }

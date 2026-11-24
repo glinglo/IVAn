@@ -14,6 +14,7 @@ export function AccionesCabecera({ anio, anioActual }: { anio?: number; anioActu
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       {anio !== undefined && anioActual !== undefined && (
         <Dropdown
+          className="w-auto"
           value={String(anio)}
           options={anios.map((a) => ({ value: String(a), label: String(a) }))}
           onSelect={(o) => {

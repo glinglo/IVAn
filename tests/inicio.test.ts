@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { avisosVisibles, cascada, clasificarAvisos, estadoYCuota, salud, seriesMensuales } from "../lib/inicio";
+import { avisosVisibles, cascada, clasificarAvisos, estadoYCuota, pygTrimestre, salud, seriesMensuales } from "../lib/inicio";
 import { pyg, type DatosCalc } from "../lib/calculo";
 import type { Ajustes } from "../lib/db";
 import type { Libro, Paso } from "../lib/libro";
@@ -74,6 +74,24 @@ describe("cascada", () => {
     const p = pyg(datosCalc(), "2026-12-31");
     const filas = cascada(p);
     expect(filas[filas.length - 1]).toMatchObject({ label: "Rendimiento neto", value: p.rendimientoNeto, kind: "result" });
+  });
+});
+
+describe("pygTrimestre", () => {
+  it("1T + 2T + 3T = el acumulado al 30/09, campo a campo", () => {
+    const l = libro();
+    const acumulado = pyg(l.datos, "2026-09-30");
+    const t1 = pygTrimestre(l, 2026, 1, "2026-09-30");
+    const t2 = pygTrimestre(l, 2026, 2, "2026-09-30");
+    const t3 = pygTrimestre(l, 2026, 3, "2026-09-30");
+    for (const campo of ["ingresos", "gastosFacturas", "seguridadSocial", "amortizaciones", "dificilJustificacion", "rendimientoNeto"] as const) {
+      expect(Math.round((t1[campo] + t2[campo] + t3[campo]) * 100) / 100).toBeCloseTo(acumulado[campo], 2);
+    }
+  });
+
+  it("el 1T es igual al acumulado al 31/03", () => {
+    const l = libro();
+    expect(pygTrimestre(l, 2026, 1, "2026-09-30")).toEqual(pyg(l.datos, "2026-03-31"));
   });
 });
 

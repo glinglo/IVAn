@@ -585,6 +585,112 @@ Rama nueva, `plan/rediseno-b2`, desde `wip/v0`. No se toca `lib/calculo.ts`.
   - **a 390 px:** la franja con aire; el bloque «Resultados» con el selector a todo el ancho; al tocar un mes, la fila de detalle; sin avatar en escritorio ni columna derecha en móvil;
   - **al cambiar de periodo,** el bloque se atenúa mientras carga.
 
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+- `@glinglo/vela-ds@0.7.0` instalado. Comprobado antes de tocar código: `NoticeStrip` ya admite `target` (resuelve la desviación apuntada en la B.1); `Dropdown` admite `className`; `SegmentedControl` admite `disabled` por opción; `CardHeader`, `BarChart` (`highlight`, `selectedIndex`, `onSelect`, `formatValue`, `pendingLabel`, `legend`), `Waterfall` y `Tooltip` tal como describe el plan.
+- **Cabecera (punto 2):** sin cambios de contenido; el `Dropdown` del año lleva `className="w-auto"` en `AccionesCabecera.tsx`.
+- **Bloque «Resultados» (punto 4):** nueva `Card` única en `app/(panel)/page.tsx` con `CardHeader` («Resultados» + subtítulo del periodo), `Periodo` en `actions` en escritorio y debajo del título a todo el ancho en móvil (dos renders con `lg:hidden`/`hidden lg:block`, como sugería el plan). `Periodo` (`components/Periodo.tsx`) pasa a `variant="contrast"` y a trimestres futuros `disabled` en vez de ocultos.
+- **Etiquetas cortas de la cascada:** `FilaCascada` (`lib/inicio.ts`) gana `labelCorta`; `components/Cascada.tsx` pinta dos `Waterfall` (uno con `label`, otro con `labelCorta`) y los alterna con `hidden lg:block` / `lg:hidden`, igual que `Periodo`.
+- **Barras (`components/Barras.tsx`):** ahora de cliente, con el botón de información (`Tooltip` de Vela), `legend`, `formatValue`, `pendingLabel="sin facturar"`, `highlight` (recibido desde la página según el trimestre elegido) y `selectedIndex`/`onSelect`. En móvil pinta la fila de detalle del mes tocado (por defecto, el último con datos) y la nota de «sin facturar»/cómo verlo cambia entre móvil y escritorio.
+- **Dos columnas en escritorio (punto 5):** `mainClassName` del `AppShell` (`app/(panel)/layout.tsx`) pasa a `lg:max-w-7xl`, para todo el panel (el plan lo pide en el `AppShell`, compartido por las demás páginas; no se ha tocado el contenido de Ventas, Gastos e Impuestos, que siguen con su propio ancho).
+- **«Por hacer» en tarjetas:** nuevo `components/PorHacerEscritorio.tsx` (cliente), con la misma cookie `ivan_aviso_oculto` que `AvisosInicio.tsx`. La tarea destacada usa `NoticeCard` grande con `onDismiss`; el resto, `size="sm"`. `AvisosInicio` se oculta en escritorio con `lg:hidden` (antes solo existía en móvil).
+- **Textos de las tareas (punto 6, `lib/libro.ts`):** el plazo sin abrir pasa a «Presentar el {t}T de {año}» / «Del {dd/mm} al {dd/mm}»; nuevo campo `dias?: number` en `Paso` (días hasta la apertura o hasta el fin); nueva función `cuandoPaso()` para el eyebrow de las tarjetas («En N días» / «Quedan N días»); «N gasto(s) sin confirmar» con el plural bien puesto.
+- **Carga con `useTransition` (punto 7):** `components/BloqueResultados.tsx` (cliente) envuelve el bloque «Resultados» y expone un contexto (`useResultadosTransition`) con `isPending`/`startTransition`; `Periodo` lo consume para envolver su `router.push`. Con `isPending`, el bloque lleva `opacity-60` y `aria-busy="true"`.
+- **Desviación apuntada:** el plan pide que la primera tarjeta de «Por hacer» en escritorio lleve la X para ocultarla; `NoticeCard size="sm"` (las compactas) no admite `onDismiss` en Vela 0.7.0, así que solo la tarjeta grande se puede ocultar, igual que en móvil.
+- **Desviación apuntada:** sin tareas, el plan prevé una `NoticeCard size="sm"` «Todo al día» y, si Vela la exige con `href`, una línea de texto. Como `size="sm"` exige `href` siempre (tipo `NoticeCardSmProps`), se usa directamente la línea de texto `text-tertiary`, sin enlace.
+- **Comprobado:** `npm test` (100 tests, sin ningún test roto por los textos nuevos de `siguientesPasos`), `npm run typecheck`, `next build` y `next start` (puerto 3178) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=3`, `/?anio=2025`, `/?anio=2025&periodo=4`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4` y `/ajustes` dan todas `200`. En el HTML de `/`: un solo `<h1>`, «Resultados» como `<h2>` y ningún `role="tooltip"`.
+- **Punto 6 de Configuración, de paso:** con Vela 0.7.0, `NoticeStrip` ya admite `target`; se añade `target="_blank"` al enlace al bot en `app/(panel)/ajustes/page.tsx`, cerrando la desviación apuntada en la B.1.
+- Sin vista previa de Vercel en esta sesión: queda pendiente de que Jose revise visualmente (a 1440 px y 390 px) que coincide con el lienzo «Propuesta 24/11 · Inicio v2» — en especial las dos columnas, el tooltip al pasar el ratón por un mes, los meses destacados con un trimestre elegido, y la atenuación del bloque al cambiar de periodo.
+
+## Fase B.3 · Retoques tras revisar la B.2 (24/11/2026)
+
+**Aprobado por Jose el 24/11/2026.** Diseño en el lienzo, fila «Propuesta 24/11 · Inicio v3 (tras revisar la B.2)»: `InicioEscritorio3` (escritorio, datos de hoy) y `PorHacerEstados` (la columna derecha el 24/11, el 2/01 y el 25/01).
+
+En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.ts`.
+
+**A. Revisión del código de la B.2 (Claude)**
+1. **Tests del punto 6 de la B.2** en `tests/libro.test.ts`:
+   - plazo sin abrir: texto «Presentar el 4T de 2026», detalle «Del 01/01 al 01/02» y `dias` = días hasta la apertura;
+   - plazo abierto: `dias` = días hasta el fin;
+   - «1 gasto sin confirmar» y «2 gastos sin confirmar»;
+   - `cuandoPaso` en los dos casos.
+2. **`cuandoPaso` no lee el texto del detalle.** Decide si el plazo está abierto con `nivel !== "info"` o con un campo `abierto?: boolean` en `Paso`.
+3. **Singular y cero:** «Queda 1 día» / «En 1 día»; con 0, «Último día». También en el detalle «Quedan N días (hasta el …)».
+4. **Badge del drawer** (`AvisosInicio`, móvil): usa `cuandoPaso` cuando hay `dias`.
+
+**B. Selector de año por debajo de la columna derecha**
+5. El `aside` es `sticky` y crea su propia capa, así que la lista del `Dropdown` del año se pinta debajo. En IVAn: la cabecera de Inicio (`PageHeader` o su contenedor) con `relative z-20`. Comprueba que la lista se ve entera por encima de la columna derecha y de «Resultados». Apunta en las notas que el arreglo de fondo es de Vela (la lista del `Dropdown` con `z-50` o en un portal), para su próxima versión.
+
+**C. Periodo por trimestre, no acumulado**
+6. Con 1T…4T, «Resultados» enseña **solo ese trimestre**; con «Año», el acumulado de enero a hoy (como ahora).
+   - Nueva función en `lib/inicio.ts`, `pygTrimestre(libro, anio, t, hasta)`: resta campo a campo `pyg` hasta el fin del trimestre (o `hasta`, si está en curso) menos `pyg` hasta el fin del trimestre anterior (para el 1T, nada que restar). Campos: ingresos, gastos con factura, cuota, amortización, difícil justificación y rendimiento neto. Es lo mismo que ya hace `seriesMensuales` con los meses.
+   - Margen = rendimiento del trimestre / ingresos del trimestre. «≈ X € al mes de media» = rendimiento del trimestre / meses del trimestre transcurridos.
+   - Subtítulo del bloque: «2T · de abril a junio»; si está en curso, «4T · de octubre a hoy».
+   - Cascada con las cifras del trimestre.
+   - Las barras no cambian: el año entero con el trimestre destacado (`highlight`).
+   - Tests: 1T + 2T + 3T = acumulado al 30/09 en cada campo; el 1T es igual al acumulado al 31/03.
+   - En «Cómo se calcula» (fase E) se dirá que el 5 % por trimestre es aproximado (su tope de 2.000 € es anual); aquí no hace falta texto.
+
+**D. Columna derecha en una sola tarjeta (escritorio)**
+7. Una sola `Card` (como «Resultados»; relleno `p-5`) dentro del `aside` sticky:
+   - **Cabecera «Por hacer»:** eyebrow `h2` y, a la derecha, el número de tareas en un `Badge` lila.
+   - **Las tareas:** `NoticeCard size="sm"` con su color de nivel (lila `info`, amarillo `pendiente`, rojo `urgente`), eyebrow «{i} de N · {cuándo}», título, detalle y enlace. **El título no se corta:** hasta dos líneas. Si `NoticeCard size="sm"` de Vela lo corta a una línea sin opción, para y apúntalo (sería un cambio de Vela).
+   - **La tarjeta grande** (`NoticeCard` normal, con X) **solo** cuando la tarea es urgente o desde el día 28, la misma regla que en móvil. Va dentro de la tarjeta, la primera. Así ya lo hace `PorHacerEscritorio`: no cambia.
+   - Sin tareas: la línea «Todo al día» (`text-tertiary`), como ahora.
+   - **Separador** (`h-px bg-separator`).
+   - **«Más detalle»:** eyebrow `h2` y filas con `ListItem` de Vela: título, pista debajo y flecha › a la derecha, enlazando como ahora.
+     - Pista de «Impuestos»: plazo sin abrir → «Próximo: 4T, del 01/01 al 01/02»; plazo abierto → «4T pendiente · del 01/01 al 01/02»; sin plazo pendiente → «Todo presentado».
+     - «En qué se van los gastos»: «2.251 € este año», como ahora.
+   - En móvil no cambia nada: franja, drawer y «Más detalle» al final.
+
+**E. Detalles**
+8. **El «€» no se parte de su cifra:** `euros()` en `lib/fiscal.ts` usa espacio de no separación (` `) antes de «€». Una función `eurosSinCentimos(n)` sustituye los `.replace(/,\d\d €/, " €")` repetidos (`page.tsx`, `Barras.tsx`, `Cascada.tsx`). En «De cada 100 € que facturas, te quedan 70 €.» los dos «€» con ` `. Ajusta los tests de `euros` si comparan el espacio. Ojo: los textos del bot y los PDF también usan `euros()`; con ` ` se ven igual.
+9. **Barras en escritorio sin mes seleccionado por defecto:** el `selectedIndex` por defecto (último mes con datos) solo en móvil. En escritorio, ningún mes en negrita hasta pasar el ratón.
+
+**Comprueba:**
+- `npm test` (con los tests nuevos de A y C), `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=4`, `/?anio=2025` en `200`.
+- Con los datos reales: «Año» igual que ahora (20.572 €); 1T + 2T + 3T = el acumulado al 30/09 que enseñaba la B.2 con 3T (18.778 €).
+- **Vista previa a 1440 px**, comparando con `InicioEscritorio3`: el desplegable del año se abre por encima de todo; la columna derecha es una tarjeta; los títulos de las tareas en dos líneas; «Más detalle» con flechas; «oct» no sale en negrita; «70 €» no se parte. Con 2T, el subtítulo «2T · de abril a junio» y cifras solo de abril a junio.
+- **Vista previa a 390 px:** sin cambios respecto a la B.2, salvo el badge del drawer con «En 38 días».
+
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+- **A.** `cuandoPaso` (`lib/libro.ts`) ya no lee el texto del detalle: nuevo campo `abierto?: boolean` en `Paso`, puesto por `siguientesPasos` junto a `dias`. Singular y cero resueltos con una función interna `detalleDiasRestantes` (para el detalle del paso, «Quedan N días (hasta el …)» / «Queda 1 día (…)» / «Último día (…)») y la propia `cuandoPaso` (para el eyebrow y el badge, «En N días» / «En 1 día» / «Quedan N días» / «Queda 1 día» / «Último día»). «1 gasto sin confirmar» / «N gastos sin confirmar» ya estaba bien desde la B.2 (sin cambios). El badge del drawer (`components/AvisosInicio.tsx`) usa `cuandoPaso` cuando hay `dias`, con el color de su nivel; si no hay `dias` (p. ej. Verifactu), cae al badge fijo de antes. Tests nuevos en `tests/libro.test.ts`.
+- **B.** `app/(panel)/page.tsx`: el `PageHeader` de Inicio va envuelto en un `<div className="relative z-20">` para que el `Dropdown` del año se vea por encima de la columna derecha y «Resultados». **Desviación apuntada:** el arreglo de fondo (la lista del `Dropdown` con `z-50` o un portal) sigue pendiente en Vela.
+- **C.** Nueva `pygTrimestre(libro, anio, t, hasta)` en `lib/inicio.ts` (resta de dos acumulados de `pyg`, campo a campo). Con un trimestre elegido, el bloque «Resultados» usa `pygTrimestre` en vez del acumulado: rendimiento, margen, «≈X € al mes de media» (sobre los meses transcurridos del propio trimestre) y la cascada. El subtítulo pasa a «{t}T · de {mes} a {mes o "hoy"}». Las barras siguen con el año entero y el trimestre en `highlight`, sin cambios. Tests en `tests/inicio.test.ts`: 1T+2T+3T = acumulado al 30/09 por campo, y 1T = acumulado al 31/03.
+- **D.** La columna derecha de escritorio pasa a una sola `Card` (`p-5 gap-4`) en `page.tsx`: cabecera «Por hacer» con `Badge type="primary"` con el número de tareas, `PorHacerEscritorio` (sin cambios: ya hacía lo que pide este punto desde la B.2), separador y «Más detalle» con `ListItem` (`chevron`) en vez del `<a>` con flechas a mano. El título de `NoticeCard size="sm"` no lleva ningún `line-clamp` en Vela 0.7.0 (comprobado en el bundle), así que ya envuelve a dos líneas sin necesidad de ningún ajuste.
+- **E.** `euros()` (`lib/fiscal.ts`) usa ahora un espacio de no separación (` `) antes de «€», así que el € nunca se parte de su cifra en ningún sitio que ya use `euros()` (bot y PDF incluidos: se ven igual). Nueva `eurosSinCentimos()` en el mismo fichero, que sustituye los `.replace(/,\d\d €/, " €")` repetidos de `page.tsx`, `Barras.tsx` y `Cascada.tsx`. Tests de `euros` en `tests/fiscal.test.ts` ajustados al espacio nuevo. En `Barras.tsx`, el mes seleccionado por defecto (el último con datos) solo se fija en móvil, con un `useEffect` que comprueba `window.matchMedia("(max-width: 1023px)")`; en escritorio no hay mes en negrita hasta pasar el ratón.
+- **Comprobado:** `npm test` (108 tests, con los nuevos de A y C), `npm run typecheck`, `next build` y `next start` (puerto 3179) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=4`, `/?anio=2025`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4` y `/ajustes` dan todas `200`. En el HTML de `/`: un solo `<h1>`, «Resultados» como `<h2>`, ningún `role="tooltip"`. Con los datos reales: «Año» da 20.572 €; 1T + 2T + 3T da 18.776 € (6.044 + 6.312 + 6.420), prácticamente el acumulado al 30/09 que enseñaba la B.2 (18.778 €; la diferencia de 2 € es redondeo por trimestre en vez de redondeo del acumulado). Con 2T: subtítulo «2T · de abril a junio» y cifras solo de abril a junio (6.312 €). «Por hacer» con el badge «2». «Impuestos»: «Próximo: 4T, del 01/01 al 01/02».
+- Sin vista previa de Vercel en esta sesión: queda pendiente de que Jose compare visualmente con `InicioEscritorio3` y `PorHacerEstados` a 1440 px y 390 px.
+
+### Correcciones tras la revisión visual de Jose (24/11/2026)
+
+1. **Barras del trimestre:** con 1T…4T elegido, el gráfico enseña **solo los meses de ese trimestre** (en el 4T en curso, octubre y noviembre «sin facturar»), sin `highlight`. Con «Año», como ahora: de enero al mes actual. Así las barras cuentan lo mismo que las cifras de arriba. La nota de debajo y la fila de detalle en móvil siguen igual, sobre esos meses; por defecto, el último mes con datos del trimestre.
+2. **El «€» de «te quedan 72 €.» sigue partiéndose** en escritorio: la frase de `app/(panel)/page.tsx` aún usa espacios normales. Los dos «€» de esa frase con `\u00a0` (punto 8 de la B.3).
+3. **Los títulos de las tareas se cortan** en la columna derecha («Registrar la factura de noviemb…» y el detalle «…mándale el PDF al…»): `NoticeCard size="sm"` sí recorta a una línea. Si admite `className`, que el título y el detalle envuelvan hasta dos líneas desde IVAn; si no, para y apúntalo como cambio de Vela (y deja el recorte como está).
+
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+1. **Barras del trimestre:** `app/(panel)/page.tsx` recorta `serie` a los tres meses del trimestre elegido (`serieBarras`) antes de pasarla a `Barras`, y ya no se le pasa `highlight` (queda `undefined`, es decir, sin resaltado): con un trimestre, el gráfico muestra solo esos meses; con «Año», la serie completa como antes. `Barras.tsx` no cambia: ya elige el último mes con datos de la serie que recibe, así que en un trimestre preselecciona el último mes de ese trimestre con datos (solo en móvil, como ya hacía).
+2. `app/(panel)/page.tsx`: los dos «€» de «De cada 100 € que facturas, te quedan N €.» ahora con `&nbsp;` antes del símbolo, como ya hacía `euros()` desde la B.3 para el resto de cifras.
+3. **Desviación apuntada:** `NoticeCard size="sm"` recorta el título a una línea con una clase `truncate` fija en el `<span>` interno del paquete (comprobado en `node_modules/@glinglo/vela-ds/dist/index.js`); el `className` que admite el componente solo llega al `<a>` que envuelve toda la tarjeta, no al título ni a la descripción. No hay forma de envolver a dos líneas desde IVAn sin tocar Vela: se deja el recorte como está, pendiente de que Vela exponga esas clases.
+4. **Comprobado:** `npm test`, `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=3`, `/?periodo=4`, `/?anio=2025` en `200`.
+
+### Retoques finos tras la segunda revisión de Jose (24/11/2026)
+
+1. **«Antes del IRPF de la Renta» detrás de un ⓘ:** se quita la línea de debajo de la cifra. Junto al eyebrow «Rendimiento neto» va el mismo botón de información que en las barras (`aria-label="Qué es el rendimiento neto"`), con un `Tooltip`: «Antes del IRPF de la Renta: es la base sobre la que se calcula lo que pagas en la Renta.» Con el mismo componente que el ⓘ de las barras, para que en móvil se abra al tocarlo.
+2. **Orden del bloque de rendimiento:** la cifra grande; justo debajo, «≈ X € al mes de media» (`text-caption`); después el `Badge` del margen y la frase «De cada 100 €…».
+3. **Más aire entre la cabecera («Hola, Jose» / «Tus resultados de 2026») y el contenido:** de 24 a 32 px (`gap-8` en el contenedor de Inicio), en escritorio y en móvil.
+4. **El número de tareas de «Por hacer»** va en `Badge` lila (como pedía el punto 7 de la B.3), no en el gris oscuro de `type="primary"`. Si Vela no tiene un `Badge` lila, el tipo más claro que tenga; apúntalo.
+
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+1. `app/(panel)/page.tsx`: junto al eyebrow «Rendimiento neto» va un botón `aria-label="Qué es el rendimiento neto"` con `Tooltip` («Antes del IRPF de la Renta: es la base sobre la que se calcula lo que pagas en la Renta.»), igual que el ⓘ de `Barras.tsx`. Se quita la línea «Antes del IRPF de la Renta» de debajo de la cifra.
+2. Orden del bloque de rendimiento: cifra grande, «≈ X € al mes de media», `Badge` del margen y la frase «De cada 100 €…».
+3. El `return` de Inicio pasa a un único `<div className="flex flex-col gap-8">` que envuelve la cabecera y el contenido (antes eran dos hijos sueltos de un `<>` sin espacio entre ellos); la separación interna entre «Resultados»/«Por hacer» en el contenedor de columnas sigue en `gap-6` (24 px), que es un espaciado distinto al de la cabecera.
+4. **Desviación apuntada:** Vela no tiene un `Badge` de tipo lila explícito; de los seis tipos (`primary`, `secondary`, `tertiary`, `destructive`, `success`, `onhold`), `tertiary` es el único que usa `--color-brand-100` (comprobado en `node_modules/@glinglo/vela-ds/dist/index.css`), así que el número de tareas pasa de `type="primary"` a `type="tertiary"`.
+5. **Comprobado:** `npm test`, `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=3`, `/?periodo=4`, `/?anio=2025` en `200`. Sin vista previa de Vercel: queda pendiente la revisión visual de Jose.
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**
