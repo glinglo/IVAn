@@ -676,6 +676,13 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 3. **Desviación apuntada:** `NoticeCard size="sm"` recorta el título a una línea con una clase `truncate` fija en el `<span>` interno del paquete (comprobado en `node_modules/@glinglo/vela-ds/dist/index.js`); el `className` que admite el componente solo llega al `<a>` que envuelve toda la tarjeta, no al título ni a la descripción. No hay forma de envolver a dos líneas desde IVAn sin tocar Vela: se deja el recorte como está, pendiente de que Vela exponga esas clases.
 4. **Comprobado:** `npm test`, `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=3`, `/?periodo=4`, `/?anio=2025` en `200`.
 
+### Retoques finos tras la segunda revisión de Jose (24/11/2026)
+
+1. **«Antes del IRPF de la Renta» detrás de un ⓘ:** se quita la línea de debajo de la cifra. Junto al eyebrow «Rendimiento neto» va el mismo botón de información que en las barras (`aria-label="Qué es el rendimiento neto"`), con un `Tooltip`: «Antes del IRPF de la Renta: es la base sobre la que se calcula lo que pagas en la Renta.» Con el mismo componente que el ⓘ de las barras, para que en móvil se abra al tocarlo.
+2. **Orden del bloque de rendimiento:** la cifra grande; justo debajo, «≈ X € al mes de media» (`text-caption`); después el `Badge` del margen y la frase «De cada 100 €…».
+3. **Más aire entre la cabecera («Hola, Jose» / «Tus resultados de 2026») y el contenido:** de 24 a 32 px (`gap-8` en el contenedor de Inicio), en escritorio y en móvil.
+4. **El número de tareas de «Por hacer»** va en `Badge` lila (como pedía el punto 7 de la B.3), no en el gris oscuro de `type="primary"`. Si Vela no tiene un `Badge` lila, el tipo más claro que tenga; apúntalo.
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**
