@@ -693,6 +693,15 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 
 ## Fase C · Ventas y Gastos
 
+**Antes de empezar (añadido el 24/11/2026, tras la B.3):**
+- Rama `plan/rediseno-c` desde `wip/v0` (ya con Vela 0.7.1). No se toca `lib/calculo.ts`.
+- **El periodo funciona igual que en Inicio:** el mismo componente `Periodo` (`variant="contrast"`, trimestres futuros desactivados, `useTransition`). «Año» = de enero a hoy; **1T…4T = solo ese trimestre** (no acumulado), en las cifras, en los clientes, en las categorías y en la lista.
+- Importes con `euros()` / `eurosSinCentimos()` (ya llevan el espacio de no separación).
+
+**Retoques de Inicio que quedaron de la B.3 (de paso, en esta fase):**
+1. **Eyebrow de la tarea «facturar del mes»:** hoy dice «2 de 2 · Info». Que diga «Este mes», como en el lienzo (`PorHacerEstados`). En `cuandoPaso` (o donde se arma el eyebrow), para `clave === "facturar"` sin `dias`: «Este mes». Las demás tareas sin `dias` siguen con su nivel. Test.
+2. **Espacio de «Más detalle»:** entre el título «Más detalle» y su primera fila hay bastante más aire que entre «Por hacer» y su primera tarea. Que sea el mismo (12 px). Si sale del relleno de `ListItem`, ajústalo con su `className`; si no se puede desde IVAn, para y apúntalo como cambio de Vela.
+
 **Ventas (`/ventas`):**
 - Cabecera.
 - `SegmentedControl` del periodo.
