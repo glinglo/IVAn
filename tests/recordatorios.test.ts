@@ -78,7 +78,7 @@ describe("proveedoresQueFaltan", () => {
 });
 
 describe("suscripciones", () => {
-  it("Cursor recurrente (2 de los 3 meses anteriores): activa con el coste del último mes con gasto", () => {
+  it("Cursor recurrente y con gasto en octubre (último mes cerrado): activa, con la pista de que ha subido", () => {
     const gastos = [
       g("Cursor", "2026-07-05", "confirmado", null, 17),
       g("Cursor", "2026-08-05", "confirmado", null, 17),
@@ -86,22 +86,22 @@ describe("suscripciones", () => {
       g("Cursor", "2026-10-05", "confirmado", null, 72),
     ];
     const r = suscripciones(gastos, HOY);
-    expect(r.activas).toEqual([{ nombre: "Cursor", costeMes: 72 }]);
-    expect(r.sinFacturaDesde).toEqual([]);
+    expect(r.activas).toEqual([{ nombre: "Cursor", costeMes: 72, cambio: { tipo: "sube", antes: 17 } }]);
+    expect(r.sinFacturaUltimoMes).toEqual([]);
   });
 
-  it("recurrente en junio y julio, sin nada desde entonces: «sin factura desde» julio", () => {
-    const gastos = [g("Notion", "2026-06-10", "confirmado", null, 10), g("Notion", "2026-07-10", "confirmado", null, 10)];
+  it("recurrente (agosto y septiembre) pero sin gasto en octubre: fila gris, no activa", () => {
+    const gastos = [g("Apify", "2026-08-10", "confirmado", null, 25), g("Apify", "2026-09-10", "confirmado", null, 25)];
     const r = suscripciones(gastos, HOY);
     expect(r.activas).toEqual([]);
-    expect(r.sinFacturaDesde).toEqual([{ nombre: "Notion", mes: "2026-07" }]);
+    expect(r.sinFacturaUltimoMes).toEqual([{ nombre: "Apify" }]);
   });
 
   it("un solo mes, ni recurrente ni activa", () => {
     const gastos = [g("Figma", "2026-10-10", "confirmado", null, 15)];
     const r = suscripciones(gastos, HOY);
     expect(r.activas).toEqual([]);
-    expect(r.sinFacturaDesde).toEqual([]);
+    expect(r.sinFacturaUltimoMes).toEqual([]);
   });
 });
 
@@ -113,7 +113,7 @@ describe("cambiosGastos", () => {
       g("Cursor", "2026-09-05", "confirmado", null, 17),
       g("Cursor", "2026-10-05", "confirmado", null, 72),
     ];
-    expect(cambiosGastos(gastos, HOY)).toEqual([{ nombre: "Cursor", tipo: "sube" }]);
+    expect(cambiosGastos(gastos, HOY)).toEqual([{ nombre: "Cursor", tipo: "sube", antes: 17 }]);
   });
 
   it("baja al menos un 50 % y 10 €: «Baja»", () => {
@@ -123,7 +123,7 @@ describe("cambiosGastos", () => {
       g("Fly.io", "2026-09-05", "confirmado", null, 40),
       g("Fly.io", "2026-10-05", "confirmado", null, 5),
     ];
-    expect(cambiosGastos(gastos, HOY)).toEqual([{ nombre: "Fly.io", tipo: "baja" }]);
+    expect(cambiosGastos(gastos, HOY)).toEqual([{ nombre: "Fly.io", tipo: "baja", antes: 40 }]);
   });
 
   it("activa pero sin gasto en el último mes cerrado: «sin_factura»", () => {

@@ -171,19 +171,20 @@ export function proveedoresQueFaltan(gastos: GastoProveedor[], hoy: string): { f
 export interface SuscripcionActiva {
   nombre: string;
   costeMes: number;
+  /** Pista corta si ha subido o bajado frente a la media de los 3 meses anteriores (`cambiosGastos`). */
+  cambio?: { tipo: "sube" | "baja"; antes: number };
 }
 
 export interface Suscripciones {
   activas: SuscripcionActiva[];
-  /** Hasta 3, la más reciente primero. */
-  sinFacturaDesde: { nombre: string; mes: string }[];
+  /** Recurrente pero sin gasto en el último mes cerrado: una fila gris de aviso, sin importe. */
+  sinFacturaUltimoMes: { nombre: string }[];
 }
 
 /**
  * Mismo criterio de recurrencia que `proveedoresQueFaltan` (confirmado en 2 de los 3 meses
- * anteriores a hoy). Activa: coste al mes = lo confirmado en el último mes con gasto (el actual si
- * ya lo tiene, si no el más reciente de los 3 anteriores). «Sin factura desde…»: recurrente en
- * algún momento del año (2 meses seguidos confirmados) y sin gasto en los 2 últimos meses.
+ * anteriores a hoy). Activa: además, con gasto confirmado en el último mes cerrado (su coste al
+ * mes). Si no: recurrente pero sin gasto en el último mes cerrado, como aviso de fin de mes.
  */
 export function suscripciones(gastos: GastoProveedor[], hoy: string): Suscripciones {
   const mesActual = hoy.slice(0, 7);
@@ -191,32 +192,36 @@ export function suscripciones(gastos: GastoProveedor[], hoy: string): Suscripcio
   const m2 = mesAnterior(m1);
   const m3 = mesAnterior(m2);
   const porProveedor = agruparPorProveedor(gastos);
+  const cambiosPorNombre = new Map(cambiosGastos(gastos, hoy).map((c) => [c.nombre, c]));
 
   const activas: SuscripcionActiva[] = [];
-  const sinFacturaDesde: { nombre: string; mes: string }[] = [];
+  const sinFacturaUltimoMes: { nombre: string }[] = [];
 
   for (const e of porProveedor.values()) {
     const confirmadoEn = (mes: string) => e.porMes.get(mes)?.confirmado ?? false;
-    const recurrenteReciente = [m1, m2, m3].filter(confirmadoEn).length >= 2;
-    const mesConGasto = [mesActual, m1, m2, m3].find(confirmadoEn);
-    if (recurrenteReciente && mesConGasto) {
-      activas.push({ nombre: e.nombre, costeMes: e.porMes.get(mesConGasto)!.importe });
+    const recurrente = [m1, m2, m3].filter(confirmadoEn).length >= 2;
+    if (!recurrente) continue;
+    if (!confirmadoEn(m1)) {
+      sinFacturaUltimoMes.push({ nombre: e.nombre });
       continue;
     }
-    const mesesConfirmados = [...e.porMes.entries()].filter(([, v]) => v.confirmado).map(([mes]) => mes).sort();
-    const dosSeguidos = mesesConfirmados.some((mes, i) => i > 0 && mesAnterior(mes) === mesesConfirmados[i - 1]);
-    if (dosSeguidos && !confirmadoEn(m1) && !confirmadoEn(m2)) {
-      sinFacturaDesde.push({ nombre: e.nombre, mes: mesesConfirmados[mesesConfirmados.length - 1] });
-    }
+    const cambio = cambiosPorNombre.get(e.nombre);
+    activas.push({
+      nombre: e.nombre,
+      costeMes: e.porMes.get(m1)!.importe,
+      cambio: cambio && cambio.tipo !== "sin_factura" ? { tipo: cambio.tipo, antes: cambio.antes! } : undefined,
+    });
   }
   activas.sort((a, b) => b.costeMes - a.costeMes);
-  sinFacturaDesde.sort((a, b) => (a.mes < b.mes ? 1 : -1));
-  return { activas, sinFacturaDesde: sinFacturaDesde.slice(0, 3) };
+  sinFacturaUltimoMes.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  return { activas, sinFacturaUltimoMes };
 }
 
 export interface CambioGasto {
   nombre: string;
   tipo: "sube" | "baja" | "sin_factura";
+  /** Media de los 3 meses anteriores. Solo en «sube»/«baja». */
+  antes?: number;
 }
 
 /**
@@ -246,7 +251,7 @@ export function cambiosGastos(gastos: GastoProveedor[], hoy: string): CambioGast
     if (media === 0) continue;
     const diferencia = actual - media;
     if (Math.abs(diferencia) >= 10 && Math.abs(diferencia / media) >= 0.5) {
-      cambios.push({ nombre: e.nombre, tipo: diferencia > 0 ? "sube" : "baja" });
+      cambios.push({ nombre: e.nombre, tipo: diferencia > 0 ? "sube" : "baja", antes: media });
     }
   }
   return cambios.slice(0, 3);

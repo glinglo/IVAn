@@ -1,14 +1,14 @@
-import { Alert, Badge, Card, CardHeader, CardMetrics, ListGroup, ListItem, PageHeader } from "@glinglo/vela-ds";
+import { Alert, Badge, Card, CardHeader, ListGroup, ListItem, PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
-import { euros, eurosSinCentimos, fechaES, hoyMadrid, nombreMes, trimestreDe } from "@/lib/fiscal";
+import { euros, eurosSinCentimos, fechaES, hoyMadrid, mesAnterior, nombreMes, pct, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
 import { nombreCorto } from "@/lib/texto";
 import { COLOR_CATEGORIA, ETIQUETA_CATEGORIA, type CategoriaGasto } from "@/lib/categorias";
-import { cambiosGastos, proveedoresQueFaltan, suscripciones, type GastoProveedor } from "@/lib/recordatorios";
+import { proveedoresQueFaltan, suscripciones, type GastoProveedor } from "@/lib/recordatorios";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { Periodo } from "@/components/Periodo";
 import { BloqueResultados } from "@/components/BloqueResultados";
 import { GraficoTipoIva } from "@/components/GraficoTipoIva";
-import { GraficoGastosMes } from "@/components/GraficoGastosMes";
+import { GraficoMes } from "@/components/GraficoMes";
 import { AvatarProveedor } from "@/components/AvatarProveedor";
 import { db } from "@/lib/db";
 
@@ -20,17 +20,6 @@ const CORTO_IVA: Record<string, string> = {
 };
 
 const ETIQUETAS_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
-const FONDO_CAMBIO: Record<"sube" | "baja" | "sin_factura", string> = {
-  sube: "bg-yellow-100",
-  baja: "bg-green-100",
-  sin_factura: "bg-gray-100",
-};
-const TEXTO_CAMBIO: Record<"sube" | "baja" | "sin_factura", string> = {
-  sube: "Sube",
-  baja: "Baja",
-  sin_factura: "Sin factura",
-};
 
 export default async function Gastos({
   searchParams,
@@ -47,10 +36,11 @@ export default async function Gastos({
   const anioCerrado = anio !== anioActual;
   const tHoy = trimestreDe(hoy).t;
   const disponibles = anioCerrado ? [1, 2, 3, 4] : Array.from({ length: tHoy }, (_, i) => i + 1);
+  const trimestreEnCurso = periodo !== null && !anioCerrado && periodo === tHoy;
 
-  // Para "Faltan este mes", "Tus suscripciones" y "Lo que ha cambiado": siempre relativos a hoy, no
-  // al periodo ni al año de la página. Desde octubre del año pasado, de sobra para los 4 meses que
-  // necesita la recurrencia aunque hoy sea enero o febrero.
+  // Para "Faltan este mes" y "Tus suscripciones": siempre relativos a hoy, no al periodo ni al año
+  // de la página. Desde octubre del año pasado, de sobra para los 4 meses que necesita la
+  // recurrencia aunque hoy sea enero o febrero.
   const desdeRecientes = `${anioActual - 1}-10-01`;
   const [libro, borr, gastosRecientes] = await Promise.all([
     cargarLibro(anio),
@@ -70,14 +60,19 @@ export default async function Gastos({
   const base = gastos.reduce((s, g) => s + g.base, 0);
   const iva = gastos.reduce((s, g) => s + g.iva, 0);
 
-  const subtituloPeriodo = periodo === null ? `Gastos de ${anio}` : `${periodo}T de ${anio}`;
+  const subtituloPeriodo =
+    periodo === null
+      ? anioCerrado
+        ? `Año ${anio} completo`
+        : "Acumulado de enero a hoy"
+      : `${periodo}T · de ${nombreMes(rangoTrimestre(anio, periodo).desde)} a ${trimestreEnCurso ? "hoy" : nombreMes(rangoTrimestre(anio, periodo).hasta)}`;
 
   // % de lo que facturas en el mismo periodo.
   const facturadoPeriodo = libro.facturas
     .filter((f) => !periodo || trimestreDe(f.fecha).t === periodo)
     .reduce((s, f) => s + f.base, 0);
   const totalGastosPeriodo = gastosDelPeriodo.reduce((s, g) => s + g.base + g.iva, 0);
-  const pctSobreFacturado = facturadoPeriodo > 0 ? Math.round((totalGastosPeriodo / facturadoPeriodo) * 100) : null;
+  const pctSobreFacturado = facturadoPeriodo > 0 ? (totalGastosPeriodo / facturadoPeriodo) * 100 : null;
 
   // Por categoría (sobre el periodo, sin el filtro de categoría).
   const porCategoria = new Map<CategoriaGasto, number>();
@@ -101,48 +96,30 @@ export default async function Gastos({
   for (const g of gastosDelPeriodo) porTipo.set(g.tipo, (porTipo.get(g.tipo) ?? 0) + g.base + g.iva);
   const totalTipos = [...porTipo.values()].reduce((s, v) => s + v, 0) || 1;
   const sinDeducir = (porTipo.get("ISP UE") ?? 0) + (porTipo.get("ISP fuera UE") ?? 0) + (porTipo.get("Sin IVA deducible") ?? 0);
-  const pctSinDeducir = Math.round((sinDeducir / totalTipos) * 100);
+  const pctSinDeducir = (sinDeducir / totalTipos) * 100;
   const conDeducible = totalTipos - sinDeducir;
 
   // Faltan este mes (desde el día 28).
   const faltanEsteMes = Number(hoy.slice(8)) >= 28 ? proveedoresQueFaltan(gastosParaRecurrencia, hoy).faltan : [];
 
-  // Tus suscripciones y lo que ha cambiado (siempre los últimos meses, no el periodo de la página).
-  const { activas, sinFacturaDesde } = suscripciones(gastosParaRecurrencia, hoy);
+  // Tus suscripciones (siempre los últimos meses, no el periodo de la página).
+  const { activas, sinFacturaUltimoMes } = suscripciones(gastosParaRecurrencia, hoy);
   const totalMes = activas.reduce((s, a) => s + a.costeMes, 0);
-  const cambios = cambiosGastos(gastosParaRecurrencia, hoy);
+  const ultimoMesCerrado = mesAnterior(hoy.slice(0, 7));
 
-  // Gráfico por mes y categoría: los meses del periodo (año = de enero al mes en curso; trimestre = sus 3 meses).
+  // Gráfico por mes: el total por mes (una sola serie), los meses del periodo.
   const mesHoy = Number(hoy.slice(5, 7));
   const [mesIni, mesFin] = periodo === null ? [1, anioCerrado ? 12 : mesHoy] : [(periodo - 1) * 3 + 1, periodo * 3];
+  const mesActualIso = hoy.slice(0, 7);
   const mesesGrafico = Array.from({ length: mesFin - mesIni + 1 }, (_, i) => {
     const mes = `${anio}-${String(mesIni + i).padStart(2, "0")}`;
-    const delMes = libro.gastos.filter((g) => g.fecha.startsWith(mes));
-    const porCat = new Map<CategoriaGasto, number>();
-    for (const g of delMes) {
-      const c = (g.categoria ?? "otros") as CategoriaGasto;
-      porCat.set(c, (porCat.get(c) ?? 0) + g.base + g.iva);
-    }
-    return { label: ETIQUETAS_MES[mesIni + i - 1], values: (Object.keys(ETIQUETA_CATEGORIA) as CategoriaGasto[]).map((c) => porCat.get(c) ?? 0) };
+    const esActual = mes === mesActualIso && anio === anioActual;
+    const valor = libro.gastos.filter((g) => g.fecha.startsWith(mes)).reduce((s, g) => s + g.base + g.iva, 0);
+    return { label: ETIQUETAS_MES[mesIni + i - 1], valor, pendiente: esActual };
   });
-  const seriesCategorias = (Object.keys(ETIQUETA_CATEGORIA) as CategoriaGasto[]).map((c) => ({
-    name: ETIQUETA_CATEGORIA[c],
-    color: COLOR_CATEGORIA[c],
-  }));
 
   // Meses del periodo, de más reciente a más antiguo (lista).
   const meses = [...new Set(gastos.map((g) => g.fecha.slice(0, 7)))].sort().reverse();
-
-  const seccionCambios = cambios.length > 0 && (
-    <div className="flex flex-col gap-3">
-      <h2 className="text-eyebrow text-tertiary">Lo que ha cambiado</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {cambios.map((c) => (
-          <CardMetrics key={c.nombre} className={FONDO_CAMBIO[c.tipo]} title={nombreCorto(c.nombre)} value={TEXTO_CAMBIO[c.tipo]} />
-        ))}
-      </div>
-    </div>
-  );
 
   const seccionLista =
     gastos.length === 0 ? (
@@ -190,7 +167,14 @@ export default async function Gastos({
             {activas.map((a) => (
               <li key={a.nombre} className="flex items-center gap-3">
                 <AvatarProveedor nombre={a.nombre} size="sm" />
-                <span className="flex-1">{nombreCorto(a.nombre)}</span>
+                <div className="flex flex-col flex-1">
+                  <span>{nombreCorto(a.nombre)}</span>
+                  {a.cambio && (
+                    <span className="text-caption text-tertiary">
+                      {a.cambio.tipo === "sube" ? "↑" : "↓"} antes {eurosSinCentimos(a.cambio.antes)}
+                    </span>
+                  )}
+                </div>
                 <span>{eurosSinCentimos(a.costeMes)}</span>
               </li>
             ))}
@@ -199,15 +183,13 @@ export default async function Gastos({
       ) : (
         <p className="text-tertiary">Ninguna detectada todavía.</p>
       )}
-      {sinFacturaDesde.length > 0 && (
+      {sinFacturaUltimoMes.length > 0 && (
         <>
           <div className="h-px bg-separator" />
-          <h3 className="text-eyebrow text-tertiary">Sin factura desde…</h3>
           <ul className="flex flex-col gap-1">
-            {sinFacturaDesde.map((s) => (
-              <li key={s.nombre} className="flex items-center justify-between text-body">
-                <span>{nombreCorto(s.nombre)}</span>
-                <span className="text-tertiary">{nombreMes(`${s.mes}-01`)}</span>
+            {sinFacturaUltimoMes.map((s) => (
+              <li key={s.nombre} className="text-body text-tertiary">
+                {nombreCorto(s.nombre)} · sin factura en {nombreMes(`${ultimoMesCerrado}-01`)}
               </li>
             ))}
           </ul>
@@ -255,15 +237,13 @@ export default async function Gastos({
           { value: sinDeducir, color: "var(--color-gray-200)", label: "Sin IVA deducible" },
         ]}
       />
-      <p className="text-body">
-        El {pctSinDeducir}&nbsp;% de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir.
-      </p>
+      <p className="text-body">El {pct(pctSinDeducir)} de lo que gastas viene de fuera de España o no lleva tu NIF: no tiene IVA que deducir.</p>
     </Card>
   );
 
   return (
-    <>
-      <PageHeader title="Gastos" actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
+    <div className="flex flex-col gap-8">
+      <PageHeader title="Gastos" subtitle={`En qué se va el dinero en ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start">
         <div className="order-1 lg:order-none lg:col-start-1 lg:row-start-1 flex flex-col gap-6">
@@ -287,15 +267,15 @@ export default async function Gastos({
                 </div>
                 {pctSobreFacturado !== null && (
                   <div className="flex items-center gap-2">
-                    <Badge type={pctSobreFacturado <= 20 ? "success" : "onhold"}>{pctSobreFacturado} % de lo que facturas</Badge>
-                    {pctSobreFacturado <= 20 && <Badge type="secondary">Por debajo del 20 %: sano</Badge>}
+                    <Badge type={pctSobreFacturado <= 20 ? "success" : "onhold"}>{pct(pctSobreFacturado, 1)} de lo que facturas</Badge>
+                    {pctSobreFacturado <= 20 && <Badge type="secondary">Por debajo del {pct(20)}: sano</Badge>}
                   </div>
                 )}
               </div>
 
               <div className="h-px bg-separator" />
 
-              <GraficoGastosMes meses={mesesGrafico} series={seriesCategorias} />
+              <GraficoMes meses={mesesGrafico} serie="Gastado" ariaLabel="Gastado por mes" />
             </Card>
           </BloqueResultados>
 
@@ -308,16 +288,14 @@ export default async function Gastos({
 
         <div className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 flex flex-col gap-4">{seccionSuscripciones}</div>
 
-        <div className="order-3 lg:order-none lg:col-start-1 lg:row-start-2">{seccionCambios}</div>
+        <div className="order-3 lg:order-none lg:col-start-2 lg:row-start-2 flex flex-col gap-4">{seccionCategorias}</div>
 
-        <div className="order-4 lg:order-none lg:col-start-2 lg:row-start-2 flex flex-col gap-4">{seccionCategorias}</div>
+        <div className="order-4 lg:order-none lg:col-start-1 lg:row-start-2">{seccionLista}</div>
 
-        <div className="order-5 lg:order-none lg:col-start-1 lg:row-start-3">{seccionLista}</div>
-
-        <div className="order-6 lg:order-none lg:col-start-2 lg:row-start-3 flex flex-col gap-4">{seccionIva}</div>
+        <div className="order-5 lg:order-none lg:col-start-2 lg:row-start-3 flex flex-col gap-4">{seccionIva}</div>
 
         {faltanEsteMes.length > 0 && (
-          <div className="order-7 lg:col-start-1 lg:row-start-4">
+          <div className="order-6 lg:col-start-1 lg:row-start-3">
             <ListGroup label="Faltan este mes">
               {faltanEsteMes.map((nombre) => (
                 <ListItem key={nombre} title={nombreCorto(nombre)} description="Suele llegar cada mes" />
@@ -326,11 +304,11 @@ export default async function Gastos({
           </div>
         )}
 
-        <p className="order-8 lg:col-start-1 lg:row-start-5 text-caption text-tertiary">
+        <p className="order-7 lg:col-start-1 lg:row-start-4 text-caption text-tertiary">
           ISP: el proveedor no cobra IVA y te lo autorrepercutes y deduces en el 303 (neto 0). Las cuotas de autónomo y la
           amortización se suman en el P&L de Inicio.
         </p>
       </div>
-    </>
+    </div>
   );
 }

@@ -229,3 +229,9 @@ export function euros(n: number): string {
 export function eurosSinCentimos(n: number): string {
   return euros(n).replace(/,\d\d €/, " €");
 }
+
+/** Un porcentaje escrito a mano, con el mismo espacio de no separación que `euros()`: 70 -> "70 %". */
+export function pct(n: number, decimales = 0): string {
+  const texto = decimales > 0 ? n.toFixed(decimales).replace(".", ",") : String(Math.round(n));
+  return `${texto} %`;
+}

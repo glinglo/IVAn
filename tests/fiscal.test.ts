@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  calcularImportes, clasificarGasto, euros, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
+  calcularImportes, clasificarGasto, euros, pct, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
 } from "../lib/fiscal";
 import { avisosDeHoy } from "../lib/recordatorios";
 import { generarFacturaPDF, limpiar } from "../lib/pdf";
@@ -89,6 +89,11 @@ describe("formato y PDF", () => {
     expect(euros(3060)).toBe("3.060,00 €");
     expect(euros(1081.2)).toBe("1.081,20 €");
     expect(euros(-4.98)).toBe("-4,98 €");
+  });
+  it("pct: sin decimales redondea, con decimales usa coma", () => {
+    expect(pct(70)).toBe("70 %");
+    expect(pct(7.6, 1)).toBe("7,6 %");
+    expect(pct(26.4)).toBe("26 %");
   });
   it("limpia caracteres que la fuente no pinta", () => {
     expect(limpiar("Disseny i implementació · ✓ → 中")).toBe("Disseny i implementació · ? ? ?");

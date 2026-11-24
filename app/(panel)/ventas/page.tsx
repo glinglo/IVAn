@@ -1,11 +1,11 @@
 import { Badge, Button, Card, CardHeader, Meter, NoticeStrip, PageHeader, StackedBar } from "@glinglo/vela-ds";
 import { cargarHistoricoIngresos, cargarLibro, comparativaAnual, dependencia, proximaFactura, type FacturaLista } from "@/lib/libro";
-import { euros, eurosSinCentimos, fechaES, hoyMadrid, nombreMes, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
+import { euros, eurosSinCentimos, fechaES, hoyMadrid, nombreMes, pct, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
 import { modoParalelo } from "@/lib/externas";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { Periodo } from "@/components/Periodo";
 import { BloqueResultados } from "@/components/BloqueResultados";
-import { GraficoVentasMes } from "@/components/GraficoVentasMes";
+import { GraficoMes } from "@/components/GraficoMes";
 import { AvatarProveedor } from "@/components/AvatarProveedor";
 
 const BOT_URL = "https://t.me/Ivanelgestorbot";
@@ -18,6 +18,8 @@ const TIPO_BADGE: Record<FacturaLista["tipo"], string> = {
 };
 
 const ETIQUETAS_MES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+const capitaliza = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default async function Ventas({
   searchParams,
@@ -34,21 +36,40 @@ export default async function Ventas({
   const anioCerrado = anio !== anioActual;
   const tHoy = trimestreDe(hoy).t;
   const disponibles = anioCerrado ? [1, 2, 3, 4] : Array.from({ length: tHoy }, (_, i) => i + 1);
+  const trimestreEnCurso = periodo !== null && !anioCerrado && periodo === tHoy;
 
   const [libro, historico] = await Promise.all([cargarLibro(anio), cargarHistoricoIngresos()]);
   const facturas = libro.facturas.filter((f) => !periodo || trimestreDe(f.fecha).t === periodo);
   const base = facturas.reduce((s, f) => s + f.base, 0);
 
-  const subtituloPeriodo = periodo === null ? `Ventas de ${anio}` : `${periodo}T de ${anio}`;
+  const subtituloPeriodo =
+    periodo === null
+      ? anioCerrado
+        ? `Año ${anio} completo`
+        : "Acumulado de enero a hoy"
+      : `${periodo}T · de ${nombreMes(rangoTrimestre(anio, periodo).desde)} a ${trimestreEnCurso ? "hoy" : nombreMes(rangoTrimestre(anio, periodo).hasta)}`;
 
+  // Gráfico por mes y media mensual: los meses del periodo (año = de enero al mes en curso; trimestre = sus 3 meses).
   const mesHoy = Number(hoy.slice(5, 7));
-  const mesesTranscurridos = periodo === null ? (anioCerrado ? 12 : mesHoy) : periodo < tHoy || anioCerrado ? 3 : mesHoy - (periodo - 1) * 3;
-  const porMes = Math.round(base / Math.max(mesesTranscurridos, 1));
+  const [mesIni, mesFin] = periodo === null ? [1, anioCerrado ? 12 : mesHoy] : [(periodo - 1) * 3 + 1, periodo * 3];
+  const mesActualIso = hoy.slice(0, 7);
 
   // Modo paralelo y próxima factura (siempre del año en curso, no cambia con el periodo).
   const paralelo = modoParalelo(libro.ajustes, hoy);
   const libroActual = anio === anioActual ? libro : await cargarLibro(anioActual);
   const proxima = proximaFactura(libroActual, hoy, paralelo);
+
+  const mesesConFactura = new Set(facturas.map((f) => f.fecha.slice(0, 7)));
+  const mesesIso = Array.from({ length: mesFin - mesIni + 1 }, (_, i) => `${anio}-${String(mesIni + i).padStart(2, "0")}`);
+  const mesesTranscurridos = mesesIso.filter((mes) => mesesConFactura.has(mes) || mes !== mesActualIso).length;
+  const porMes = Math.round(base / Math.max(mesesTranscurridos, 1));
+
+  const mesesGrafico = mesesIso.map((mes, i) => {
+    const esActual = mes === mesActualIso && anio === anioActual;
+    let valor = libro.facturas.filter((f) => f.fecha.startsWith(mes)).reduce((s, f) => s + f.base, 0);
+    if (esActual && proxima) valor += proxima.importeEstimado;
+    return { label: ETIQUETAS_MES[mesIni + i - 1], valor, pendiente: esActual };
+  });
 
   // Comparativa anual: solo tiene sentido con "Año" (siempre el año en curso).
   const comparativa = periodo === null ? comparativaAnual(libro, historico, hoy) : null;
@@ -66,24 +87,13 @@ export default async function Ventas({
   const clientes = [...porCliente.entries()].sort((a, b) => b[1].base - a[1].base);
   const coloresCliente = ["var(--color-chart-primary)", "var(--color-chart-muted)", "var(--color-gray-300)", "var(--color-gray-200)"];
 
-  // Gráfico por mes: los meses del periodo (año = de enero al mes en curso; trimestre = sus 3 meses).
-  const [mesIni, mesFin] = periodo === null ? [1, anioCerrado ? 12 : mesHoy] : [(periodo - 1) * 3 + 1, periodo * 3];
-  const mesActualIso = hoy.slice(0, 7);
-  const mesesGrafico = Array.from({ length: mesFin - mesIni + 1 }, (_, i) => {
-    const mes = `${anio}-${String(mesIni + i).padStart(2, "0")}`;
-    const esActual = mes === mesActualIso && anio === anioActual;
-    let valor = libro.facturas.filter((f) => f.fecha.startsWith(mes)).reduce((s, f) => s + f.base, 0);
-    if (esActual && proxima) valor += proxima.importeEstimado;
-    return { label: ETIQUETAS_MES[mesIni + i - 1], valor, pendiente: esActual };
-  });
-
   // Facturas: las más recientes del periodo.
   const facturasMostradas = todo ? facturas : facturas.slice(0, FACTURAS_RECIENTES);
   const hayMas = !todo && facturas.length > FACTURAS_RECIENTES;
 
   return (
-    <>
-      <PageHeader title="Ventas" actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
+    <div className="flex flex-col gap-8">
+      <PageHeader title="Ventas" subtitle={`Lo que has facturado en ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
       <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 lg:items-start">
         <div className="flex flex-col gap-6">
@@ -107,8 +117,7 @@ export default async function Ventas({
                 </div>
                 {periodo === null && comparativa && comparativa.pctFrenteAnterior !== null && (
                   <Badge type={comparativa.pctFrenteAnterior >= 0 ? "success" : "onhold"} className="self-start">
-                    {comparativa.pctFrenteAnterior >= 0 ? "+" : ""}
-                    {comparativa.pctFrenteAnterior} % {comparativa.pctFrenteAnterior >= 0 ? "más" : "menos"} que en {anio - 1} de enero a{" "}
+                    {pct(Math.abs(comparativa.pctFrenteAnterior))} {comparativa.pctFrenteAnterior >= 0 ? "más" : "menos"} que en {anio - 1} de enero a{" "}
                     {nombreMes(rangoTrimestre(anio, comparativa.tCerrado).hasta)}
                   </Badge>
                 )}
@@ -116,7 +125,7 @@ export default async function Ventas({
 
               <div className="h-px bg-separator" />
 
-              <GraficoVentasMes meses={mesesGrafico} />
+              <GraficoMes meses={mesesGrafico} serie="Facturado" ariaLabel="Facturado por mes" />
             </Card>
           </BloqueResultados>
 
@@ -198,10 +207,11 @@ export default async function Ventas({
             <Card className="gap-3 bg-brand-100">
               <h3 className="text-eyebrow text-tertiary">Próxima factura · en {proxima.diasHastaFinMes} días</h3>
               <div className="text-title">
-                {nombreMes(`${proxima.mes}-01`)} · {proxima.cliente}
+                {capitaliza(nombreMes(`${proxima.mes}-01`))} · {proxima.cliente}
               </div>
               <p className="text-body">≈ {eurosSinCentimos(proxima.importeEstimado)}, como el mes pasado.</p>
-              <Button href={BOT_URL} target="_blank" variant="secondary" size="sm" className="self-start">
+              <p className="text-caption text-tertiary">{proxima.texto}</p>
+              <Button href={BOT_URL} target="_blank" variant="primary" size="sm" className="self-start">
                 Abrir el bot
               </Button>
             </Card>
@@ -211,20 +221,20 @@ export default async function Ventas({
             <Card className="gap-3">
               <h3 className="text-eyebrow text-tertiary">Dependencia de un cliente</h3>
               <div className="flex items-center gap-2">
-                <div className="text-display">{Math.round(dep.pct * 100)} %</div>
+                <div className="text-display">{pct(dep.pct * 100)}</div>
                 {dep.riesgo && <Badge type="onhold">Riesgo</Badge>}
               </div>
               <p className="text-body">de lo que facturas es de {dep.cliente}</p>
               <Meter
-                aria-label={`${Math.round(dep.pct * 100)} % de la facturación es de ${dep.cliente}`}
+                aria-label={`${pct(dep.pct * 100)} de la facturación es de ${dep.cliente}`}
                 value={dep.pct}
                 threshold={0.7}
-                thresholdLabel="70 %"
+                thresholdLabel={pct(70)}
                 tone={dep.riesgo ? "warning" : "success"}
               />
               {dep.riesgo && (
                 <p className="text-caption text-tertiary">
-                  Si {dep.cliente} se va, se va casi todo. A partir del 70 % lo marcamos como riesgo.
+                  Si {dep.cliente} se va, se va casi todo. A partir del {pct(70)} lo marcamos como riesgo.
                 </p>
               )}
             </Card>
@@ -242,18 +252,21 @@ export default async function Ventas({
                 }))}
               />
               <ul className="flex flex-col gap-3">
-                {clientes.map(([nombre, c]) => (
-                  <li key={nombre} className="flex items-center gap-3">
-                    <AvatarProveedor nombre={nombre} size="sm" />
-                    <div className="flex flex-col flex-1">
-                      <span>{nombre}</span>
-                      <span className="text-caption text-tertiary">
-                        {c.f.pais_cliente} · {TIPO_BADGE[c.f.tipo]} · {Math.round((c.base / (base || 1)) * 100)} %
-                      </span>
-                    </div>
-                    <span>{euros(c.base)}</span>
-                  </li>
-                ))}
+                {clientes.map(([nombre, c]) => {
+                  const detalleTipo = c.f.tipo === "nacional" ? `${pct(c.f.iva_pct)} · −${pct(c.f.retencion_pct)}` : TIPO_BADGE[c.f.tipo];
+                  return (
+                    <li key={nombre} className="flex items-center gap-3">
+                      <AvatarProveedor nombre={nombre} size="sm" />
+                      <div className="flex flex-col flex-1">
+                        <span>{nombre}</span>
+                        <span className="text-caption text-tertiary">
+                          {c.f.pais_cliente} · {detalleTipo} · {pct((c.base / (base || 1)) * 100)}
+                        </span>
+                      </div>
+                      <span>{euros(c.base)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </Card>
           )}
@@ -283,10 +296,12 @@ export default async function Ventas({
               <p className="text-caption text-tertiary">De tus 130 presentados (2025 sin el Kit Digital).</p>
             </Card>
           )}
-
-          <NoticeStrip title="Para facturar o corregir una factura, díselo al bot" href={BOT_URL} target="_blank" />
         </aside>
+
+        <div className="lg:col-start-1">
+          <NoticeStrip title="Para facturar o corregir una factura, díselo al bot" href={BOT_URL} target="_blank" />
+        </div>
       </div>
-    </>
+    </div>
   );
 }
