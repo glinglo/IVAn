@@ -2,7 +2,7 @@
 
 import { db, getAjustes, nums, type Ajustes } from "./db";
 import { modelo130, modelo303, modelo349, pyg, type DatosCalc, type FacturaCalc, type GastoCalc } from "./calculo";
-import { diasEntre, hoyMadrid, nombreMes, plazoTrimestral, trimestreDe, type Plazo } from "./fiscal";
+import { diasEntre, hoyMadrid, mesAnterior, nombreMes, plazoTrimestral, sumarDias, trimestreDe, type Plazo } from "./fiscal";
 import { modoParalelo } from "./externas";
 import type { CategoriaGasto } from "./categorias";
 
@@ -12,6 +12,7 @@ export interface FacturaLista {
   fecha: string;
   cliente: string;
   nif_cliente: string | null;
+  pais_cliente: string;
   concepto: string;
   base: number;
   iva_pct: number;
@@ -68,7 +69,7 @@ export async function cargarLibro(anio: number): Promise<Libro> {
     getAjustes(),
     db()
       .from("facturas")
-      .select("id, numero, fecha, concepto, base, iva_pct, iva, retencion_pct, retencion, total, tipo, origen, pdf_path, clientes(nombre, nif)")
+      .select("id, numero, fecha, concepto, base, iva_pct, iva, retencion_pct, retencion, total, tipo, origen, pdf_path, clientes(nombre, nif, pais)")
       .eq("estado", "emitida")
       .gte("fecha", desde)
       .lte("fecha", hasta)
@@ -86,11 +87,14 @@ export async function cargarLibro(anio: number): Promise<Libro> {
   ]);
   for (const r of [f, g, c, b, p]) if (r.error) throw r.error;
 
-  type FilaFactura = Omit<FacturaLista, "cliente" | "nif_cliente"> & { clientes: { nombre: string; nif: string | null } | null };
+  type FilaFactura = Omit<FacturaLista, "cliente" | "nif_cliente" | "pais_cliente"> & {
+    clientes: { nombre: string; nif: string | null; pais: string } | null;
+  };
   const facturas: FacturaLista[] = ((f.data ?? []) as unknown as FilaFactura[]).map(({ clientes, ...x }) => ({
     ...nums(x, ["base", "iva_pct", "iva", "retencion_pct", "retencion", "total"]),
     cliente: clientes?.nombre ?? "?",
     nif_cliente: clientes?.nif ?? null,
+    pais_cliente: clientes?.pais ?? "?",
   }));
   const gastos = ((g.data ?? []) as GastoLista[]).map((x) => nums(x, ["base", "iva", "manutencion_limite"]));
   const cuotas = new Map((c.data ?? []).map((r) => [String(r.mes).slice(0, 7), Number(r.importe)]));
@@ -138,6 +142,96 @@ export function resumenTrimestre(libro: Libro, t: number) {
 
 export function pygHasta(libro: Libro, hasta: string) {
   return pyg(libro.datos, hasta);
+}
+
+// ---------- Ventas: comparativa, próxima factura y dependencia ----------
+
+export interface HistoricoIngreso {
+  anio: number;
+  trimestre: number;
+  ingresos_acumulados: number;
+}
+
+export async function cargarHistoricoIngresos(): Promise<HistoricoIngreso[]> {
+  const r = await db().from("presentaciones").select("anio, trimestre, ingresos_acumulados").eq("modelo", "130").not("ingresos_acumulados", "is", null);
+  if (r.error) throw r.error;
+  return (r.data ?? []).map((x) => ({ anio: x.anio as number, trimestre: x.trimestre as number, ingresos_acumulados: Number(x.ingresos_acumulados) }));
+}
+
+export interface ComparativaAnual {
+  tCerrado: number;
+  anios: { anio: number; valor: number }[];
+  pctFrenteAnterior: number | null;
+}
+
+/** Compara de enero al fin del último trimestre cerrado del año en curso (hasta 4 años, el actual
+ * y los anteriores de `historico`). `null` si el año no tiene ningún trimestre cerrado todavía. */
+export function comparativaAnual(libro: Libro, historico: HistoricoIngreso[], hoy: string): ComparativaAnual | null {
+  const { anio, t } = trimestreDe(hoy);
+  if (anio !== libro.anio) return null;
+  const tCerrado = t - 1;
+  if (tCerrado < 1) return null;
+
+  const valorActual = libro.facturas
+    .filter((f) => trimestreDe(f.fecha).t <= tCerrado)
+    .reduce((s, f) => s + f.base, 0);
+
+  const anteriores = historico
+    .filter((h) => h.anio < anio && h.trimestre === tCerrado)
+    .sort((a, b) => b.anio - a.anio)
+    .slice(0, 3)
+    .map((h) => ({ anio: h.anio, valor: h.ingresos_acumulados }));
+
+  const anios = [...anteriores, { anio, valor: valorActual }].sort((a, b) => a.anio - b.anio);
+  const anterior = anteriores.find((h) => h.anio === anio - 1);
+  const pctFrenteAnterior = anterior ? Math.round(((valorActual - anterior.valor) / anterior.valor) * 100) : null;
+  return { tCerrado, anios, pctFrenteAnterior };
+}
+
+export interface ProximaFactura {
+  mes: string;
+  cliente: string;
+  importeEstimado: number;
+  diasHastaFinMes: number;
+  texto: string;
+}
+
+/** Cliente facturado el mes pasado y sin factura este mes: el importe estimado es lo que se le
+ * facturó el mes pasado. */
+export function proximaFactura(libro: Libro, hoy: string, paralelo: boolean): ProximaFactura | null {
+  const mesActual = hoy.slice(0, 7);
+  const mesPasado = mesAnterior(mesActual);
+  const facturadoMesActual = new Set(libro.facturas.filter((f) => f.fecha.startsWith(mesActual)).map((f) => f.cliente));
+  const delMesPasado = libro.facturas.find((f) => f.fecha.startsWith(mesPasado) && !facturadoMesActual.has(f.cliente));
+  if (!delMesPasado) return null;
+
+  const [y, m] = mesActual.split("-").map(Number);
+  const primerDiaSiguiente = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  const finMes = sumarDias(primerDiaSiguiente, -1);
+
+  return {
+    mes: mesActual,
+    cliente: delMesPasado.cliente,
+    importeEstimado: delMesPasado.total,
+    diasHastaFinMes: diasEntre(hoy, finMes),
+    texto: paralelo ? "La emite Selfconta: mándale el PDF al bot" : `Díselo al bot: «factura a ${delMesPasado.cliente} por …»`,
+  };
+}
+
+export interface Dependencia {
+  cliente: string;
+  pct: number;
+  riesgo: boolean;
+}
+
+/** Cliente principal del año y su parte de lo facturado (base). Riesgo si es ≥ 70 %. */
+export function dependencia(libro: Libro): Dependencia | null {
+  if (!libro.facturas.length) return null;
+  const porCliente = new Map<string, number>();
+  for (const f of libro.facturas) porCliente.set(f.cliente, (porCliente.get(f.cliente) ?? 0) + f.base);
+  const total = [...porCliente.values()].reduce((s, v) => s + v, 0) || 1;
+  const [cliente, valor] = [...porCliente.entries()].sort((a, b) => b[1] - a[1])[0];
+  return { cliente, pct: valor / total, riesgo: valor / total >= 0.7 };
 }
 
 // ---------- Siguientes pasos ----------

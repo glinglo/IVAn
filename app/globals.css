@@ -40,17 +40,12 @@
     --danger-bg: #fbe7e5;
     --radius: 14px;
     font-family: ui-sans-serif, -apple-system, "Segoe UI", system-ui, sans-serif;
-    color: var(--text);
+    color: var(--color-text-primary);
     background: var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #161615; --card: #20201e; --text: #ecebe6; --muted: #a09f99; --line: #33322f;
-      --accent: #8aa8ff; --ok: #7cc79a; --ok-bg: #1f3227; --warn: #f0b45c; --warn-bg: #3a2c16;
-      --danger: #ff8a80; --danger-bg: #3d1f1d;
-    }
-  }
+  /* Esta versión del panel es solo modo claro (ver el plan del rediseño): nada de
+     prefers-color-scheme. El oscuro con lila se diseña después. */
   * { box-sizing: border-box; }
   body { margin: 0; }
   h1 { font-size: 22px; font-weight: 600; margin: 0; }

@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { cuandoPaso, siguientesPasos, type ContextoPasos, type Libro } from "../lib/libro";
+import {
+  comparativaAnual,
+  cuandoPaso,
+  dependencia,
+  proximaFactura,
+  siguientesPasos,
+  type ContextoPasos,
+  type FacturaLista,
+  type HistoricoIngreso,
+  type Libro,
+} from "../lib/libro";
 import type { Ajustes } from "../lib/db";
 
 const ajustes = (over: Partial<Ajustes> = {}): Ajustes => ({
@@ -30,6 +40,26 @@ const libro = (over: Partial<Libro> = {}): Libro => ({
   ...over,
 });
 
+const factura = (over: Partial<FacturaLista> = {}): FacturaLista => ({
+  id: "f1",
+  numero: "00001",
+  fecha: "2026-01-10",
+  cliente: "Zapflow Oy",
+  nif_cliente: "FI26899624",
+  pais_cliente: "FI",
+  concepto: "servicios",
+  base: 1000,
+  iva_pct: 0,
+  iva: 0,
+  retencion_pct: 0,
+  retencion: 0,
+  total: 1000,
+  tipo: "ue",
+  origen: "ivan",
+  pdf_path: null,
+  ...over,
+});
+
 const ctx = (over: Partial<ContextoPasos> = {}): ContextoPasos => ({
   hoy: "2026-11-23",
   libro: libro(),
@@ -54,6 +84,7 @@ describe("siguientesPasos: clave de cada paso", () => {
           numero: "1",
           fecha: "2026-10-05",
           cliente: "Acme",
+          pais_cliente: "ES",
           nif_cliente: null,
           concepto: "Servicios",
           base: 1000,
@@ -84,6 +115,7 @@ describe("siguientesPasos: clave de cada paso", () => {
           numero: "1",
           fecha: "2026-10-05",
           cliente: "Acme",
+          pais_cliente: "ES",
           nif_cliente: null,
           concepto: "Servicios",
           base: 1000,
@@ -180,5 +212,80 @@ describe("siguientesPasos: clave de cada paso", () => {
     expect(cuandoPaso({ nivel: "pendiente", clave: "facturar", texto: "x" })).toBe("Este mes");
     expect(cuandoPaso({ nivel: "info", clave: "mac", texto: "x" })).toBe(null);
     expect(cuandoPaso({ nivel: "pendiente", clave: "gastos", texto: "x" })).toBe(null);
+  });
+});
+
+describe("comparativaAnual", () => {
+  const historico: HistoricoIngreso[] = [
+    { anio: 2023, trimestre: 3, ingresos_acumulados: 45551.59 },
+    { anio: 2024, trimestre: 3, ingresos_acumulados: 41399.05 },
+    { anio: 2025, trimestre: 3, ingresos_acumulados: 35803.55 },
+  ];
+
+  it("hasta el 3T cerrado, compara con el mismo trimestre de los años anteriores", () => {
+    const l = libro({ anio: 2026, facturas: [factura({ fecha: "2026-02-01", base: 10000 }), factura({ fecha: "2026-07-01", base: 16400 })] });
+    const r = comparativaAnual(l, historico, "2026-11-24")!;
+    expect(r.tCerrado).toBe(3);
+    expect(r.anios).toEqual([
+      { anio: 2023, valor: 45551.59 },
+      { anio: 2024, valor: 41399.05 },
+      { anio: 2025, valor: 35803.55 },
+      { anio: 2026, valor: 26400 },
+    ]);
+    expect(r.pctFrenteAnterior).toBe(-26);
+  });
+
+  it("sin trimestre cerrado todavía (enero), null", () => {
+    const l = libro({ anio: 2026 });
+    expect(comparativaAnual(l, historico, "2026-01-15")).toBeNull();
+  });
+
+  it("año distinto al del libro, null", () => {
+    const l = libro({ anio: 2025 });
+    expect(comparativaAnual(l, historico, "2026-11-24")).toBeNull();
+  });
+});
+
+describe("proximaFactura", () => {
+  it("cliente facturado el mes pasado y no este mes: importe estimado y días hasta fin de mes", () => {
+    const l = libro({ facturas: [factura({ fecha: "2026-10-16", cliente: "Zapflow Oy", total: 3060 })] });
+    const r = proximaFactura(l, "2026-11-20", false)!;
+    expect(r.cliente).toBe("Zapflow Oy");
+    expect(r.importeEstimado).toBe(3060);
+    expect(r.diasHastaFinMes).toBe(10);
+    expect(r.texto).toMatch(/Díselo al bot/);
+  });
+
+  it("en modo paralelo, el texto dice que la emite Selfconta", () => {
+    const l = libro({ facturas: [factura({ fecha: "2026-10-16" })] });
+    expect(proximaFactura(l, "2026-11-20", true)!.texto).toBe("La emite Selfconta: mándale el PDF al bot");
+  });
+
+  it("ya facturado este mes, null", () => {
+    const l = libro({ facturas: [factura({ fecha: "2026-10-16", cliente: "Zapflow Oy" }), factura({ fecha: "2026-11-05", cliente: "Zapflow Oy" })] });
+    expect(proximaFactura(l, "2026-11-20", false)).toBeNull();
+  });
+});
+
+describe("dependencia", () => {
+  it("97 % de un cliente: riesgo", () => {
+    const l = libro({
+      facturas: [factura({ cliente: "Zapflow Oy", base: 29400 }), factura({ cliente: "Otro", base: 900 })],
+    });
+    const r = dependencia(l)!;
+    expect(r.cliente).toBe("Zapflow Oy");
+    expect(Math.round(r.pct * 100)).toBe(97);
+    expect(r.riesgo).toBe(true);
+  });
+
+  it("reparto por debajo del 70 %: sin riesgo", () => {
+    const l = libro({
+      facturas: [factura({ cliente: "A", base: 5000 }), factura({ cliente: "B", base: 5000 })],
+    });
+    expect(dependencia(l)!.riesgo).toBe(false);
+  });
+
+  it("sin facturas, null", () => {
+    expect(dependencia(libro({ facturas: [] }))).toBeNull();
   });
 });
