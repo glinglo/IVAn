@@ -900,6 +900,29 @@ Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@
 - **`npm test`** (132 tests), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** con cookie a `/`, `/ventas`, `/ventas?periodo=3`, `/gastos`, `/gastos?periodo=3`, `/gastos?categoria=software_ia` e `/impuestos`: las siete dan `200` **sin ningún error en el registro** — la migración 007 ya está aplicada en el Supabase de `.env.local` (antes de esta fase daba 500 en `/ventas`, como apunté en la C.2).
 - No he repetido la prueba de integración de las 56 conversaciones: estos cambios no tocan el bot (solo las páginas del panel y las funciones de `lib/libro.ts`/`lib/recordatorios.ts` que ya cubren sus tests unitarios); `proveedoresQueFaltan`, que sí usa el cron del bot, no cambia de comportamiento, solo de implementación interna (`agruparPorProveedor` compartida).
 
+## Fase C.4 · Retoques tras la segunda revisión de la C.2 (24/11/2026)
+
+**Aprobado por Jose el 24/11/2026.** En la misma rama `plan/rediseno-c2` y el mismo PR #19. Requiere Vela 0.8.1 (plan `2026-11-24-vela-0-8-1.md` de `vela-ds`: la etiqueta «70 %» del `Meter` ya no la pisa la línea); si aún no está publicada, haz el resto y deja ese punto para el final.
+
+**Las dos páginas (escritorio)**
+1. **Los `Badge` a la derecha de la cifra, no debajo:** la fila de la cifra es `flex items-end justify-between gap-4 flex-wrap`: a la izquierda, la cifra y su línea («11 facturas · …» / «81 gastos · …»); a la derecha, los `Badge` (en columna si son dos, alineados a la derecha). En móvil, debajo como ahora.
+2. **Sin valores encima de las barras** (`showValues` fuera), como en Inicio: la cifra exacta sale en el tooltip al pasar el ratón y en la fila de detalle en móvil. Se lee más limpio y no compite con la cifra grande.
+3. **Bug del «≈»:** `GraficoMes` decide la estimación comparando el valor (`v === valorPendiente`), así que octubre (3.060 €, ya facturado) sale como «≈ 3.060 €». Que lo decida el índice/`pending` del mes, nunca el valor. En Gastos, el mes en curso sin gastos no lleva valor ni «≈ 0 €».
+4. **Abrir el PDF en un panel lateral, no en otra pestaña** (escritorio): al pulsar una factura (Ventas) o un gasto (Gastos), se abre el `Sheet` de Vela por la derecha (unos 640 px) con:
+   - cabecera: número o proveedor, fecha e importe;
+   - el archivo: PDF en un `<iframe>` (o `<object>`) de `/api/archivo?path=…`, a toda la altura; si es imagen (foto de un ticket), `<img>` ajustada al ancho;
+   - abajo, «Abrir en otra pestaña» y «Descargar».
+   - Comprueba que `/api/archivo` responde con `Content-Disposition: inline` y que nada impide mostrarlo en un `iframe` del mismo dominio.
+   - En móvil, como ahora (otra pestaña): los visores de PDF dentro de un `iframe` van mal en iOS.
+   - Es un componente de cliente propio (`VisorArchivo.tsx`) que recibe la ruta y los datos; la página no le pasa funciones.
+5. **Ventas, tabla:** la columna «Tipo» como en Clientes: «21 % · −15 %» en vez de «Nacional».
+
+**Gastos**
+6. **Las dos columnas independientes:** hoy «Por categoría» empieza a la altura de la lista de la izquierda y deja un hueco bajo «Tus suscripciones». La derecha va en su propio `flex flex-col gap-4` (como en Ventas), sin compartir filas de grid con la izquierda.
+7. **El porcentaje sobre la misma base que la cifra:** «7,7 %» sale de base + IVA (2.257,87 €), y la cifra grande es la base (2.251,13 €) → «7,6 %». Usa la base en los dos.
+
+**Comprueba:** `npm test`, `typecheck`, `build`, `curl` con cookie a `/ventas` y `/gastos` en `200`. En la vista previa (escritorio): badges a la derecha de la cifra; barras sin números encima y octubre sin «≈»; al pulsar la 00336 o un gasto de Anthropic, el PDF en el panel lateral; en Gastos, «Por categoría» justo bajo «Tus suscripciones»; «7,6 % de lo que facturas».
+
 ## Fase D · Impuestos
 
 **`/impuestos`:**
