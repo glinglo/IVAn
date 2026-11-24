@@ -182,7 +182,7 @@ async function main() {
     assert.equal(r.casillas.c108, 29460);
     assert.equal(r.casillas.cuadra, true);
     assert.equal(r.provisional, true);
-    assert.match(r.enlace_panel, /\/acceso\?t=.+&ir=%2Fanual%2F2026$/);
+    assert.match(r.enlace_panel, /\/acceso\?t=.+&ir=%2Fimpuestos%2F2026%2F390$/);
     // historial para el caso siguiente
     F.guionClaude.push((p) => [texto("ok")]);
     await mensaje("¿cómo va el trimestre?");
@@ -346,7 +346,7 @@ async function main() {
 
   const cursor = {
     es_factura: true, proveedor: "Anysphere, Inc. (Cursor)", nif_proveedor: "US123", pais: "US", numero_factura: "CUR-0042",
-    fecha: "2026-11-02", concepto: "suscripción Cursor", categoria: "otro" as const, moneda: "USD", base: 20, iva: 0, total: 20,
+    fecha: "2026-11-02", concepto: "suscripción Cursor", categoria: "otro" as const, categoria_gasto: "software_ia" as const, moneda: "USD", base: 20, iva: 0, total: 20,
     desglose_iva: [], iva_espanol: false, nif_destinatario: "00000000T", notas: null,
   };
   let gastoId = "";
@@ -384,7 +384,7 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Framer B.V.", nif_proveedor: "NL853695386B01", pais: "NL", numero_factura: "97A706DA-1920528",
-        fecha: "2026-01-14", concepto: "web hosting", categoria: "otro", moneda: "EUR", base: 180, iva: 0, total: 180,
+        fecha: "2026-01-14", concepto: "web hosting", categoria: "otro", categoria_gasto: "hosting_dominios", moneda: "EUR", base: 180, iva: 0, total: 180,
         desglose_iva: [], iva_espanol: false, nif_destinatario: null, notas: null,
       }),
     );
@@ -419,7 +419,7 @@ async function main() {
 
   const restauranteMixto = {
     es_factura: true, proveedor: "Restaurante Can Jep", nif_proveedor: "B12345678", pais: "ES", numero_factura: "R-991",
-    fecha: "2026-11-17", concepto: "comida de trabajo", categoria: "restauracion" as const, moneda: "EUR", base: 50, iva: 6.1, total: 56.1,
+    fecha: "2026-11-17", concepto: "comida de trabajo", categoria: "restauracion" as const, categoria_gasto: "comidas" as const, moneda: "EUR", base: 50, iva: 6.1, total: 56.1,
     desglose_iva: [
       { tipo_pct: 10, base: 40, cuota: 4 },
       { tipo_pct: 21, base: 10, cuota: 2.1 },
@@ -480,7 +480,7 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Paddle.com Market Ltd", nif_proveedor: "EU372017215", pais: "GB", numero_factura: "PD-1",
-        fecha: "2026-11-10", concepto: "suscripción SaaS", categoria: "otro", moneda: "EUR", base: 12.18, iva: 2.56, total: 14.74,
+        fecha: "2026-11-10", concepto: "suscripción SaaS", categoria: "otro", categoria_gasto: "software_ia", moneda: "EUR", base: 12.18, iva: 2.56, total: 14.74,
         desglose_iva: [{ tipo_pct: 21, base: 12.18, cuota: 2.56 }], iva_espanol: false, nif_destinatario: "00000000T", notas: null,
       }),
     );
@@ -617,7 +617,7 @@ async function main() {
   };
   const leidaComoPropia = forzada("guardar_gasto", {
     es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000000T", pais: "ES", numero_factura: "00340",
-    fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3060, iva: 0, total: 3060,
+    fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", categoria_gasto: "otros", moneda: "EUR", base: 3060, iva: 0, total: 3060,
     desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
   });
   const emitida = (extra: Record<string, unknown> = {}) =>
@@ -702,7 +702,7 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
-        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3060, iva: 0, total: 3060,
+        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", categoria_gasto: "otros", moneda: "EUR", base: 3060, iva: 0, total: 3060,
         desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
       }),
     );
@@ -746,7 +746,7 @@ async function main() {
     F.guionClaude.push(
       forzada("guardar_gasto", {
         es_factura: true, proveedor: "Persona de Prueba", nif_proveedor: "ES00000008T", pais: "ES", numero_factura: "00342",
-        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", moneda: "EUR", base: 3000, iva: 0, total: 3000,
+        fecha: "2026-11-16", concepto: "servicios UX", categoria: "otro", categoria_gasto: "otros", moneda: "EUR", base: 3000, iva: 0, total: 3000,
         desglose_iva: [], iva_espanol: true, nif_destinatario: "FI26899624", notas: null,
       }),
     );

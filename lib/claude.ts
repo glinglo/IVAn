@@ -56,7 +56,10 @@ export const GastoExtraido = z.object({
   fecha: z.string().nullable(),
   concepto: z.string().nullable(),
   categoria: z.enum(["restauracion", "otro"]),
-  categoria_gasto: z.enum(CATEGORIAS_GASTO),
+  categoria_gasto: z
+    .enum(CATEGORIAS_GASTO)
+    .nullable()
+    .catch(null),
   moneda: z.string(),
   base: z.number().nullable(),
   iva: z.number(),

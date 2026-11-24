@@ -63,4 +63,24 @@ describe("llamar(): respuesta cortada por max_tokens", () => {
     const r = await extraerGasto({ bytes: new Uint8Array([1]), mime: "image/png" }, "00000000A");
     expect(r.es_factura).toBe(false);
   });
+
+  it("categoria_gasto ausente o fuera del enum: el gasto se lee igual, con categoria_gasto a null", async () => {
+    const { extraerGasto } = await import("../lib/claude");
+    respuesta = {
+      stop_reason: "end_turn",
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            es_factura: false, proveedor: null, nif_proveedor: null, pais: null, numero_factura: null,
+            fecha: null, concepto: null, categoria: "otro", categoria_gasto: "no_existe", moneda: "EUR", base: null, iva: 0, total: null,
+            desglose_iva: [], iva_espanol: false, nif_destinatario: null, notas: null,
+          }),
+        },
+      ],
+    };
+    const r = await extraerGasto({ bytes: new Uint8Array([1]), mime: "image/png" }, "00000000A");
+    expect(r.es_factura).toBe(false);
+    expect(r.categoria_gasto).toBeNull();
+  });
 });
