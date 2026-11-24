@@ -683,6 +683,14 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 3. **Más aire entre la cabecera («Hola, Jose» / «Tus resultados de 2026») y el contenido:** de 24 a 32 px (`gap-8` en el contenedor de Inicio), en escritorio y en móvil.
 4. **El número de tareas de «Por hacer»** va en `Badge` lila (como pedía el punto 7 de la B.3), no en el gris oscuro de `type="primary"`. Si Vela no tiene un `Badge` lila, el tipo más claro que tenga; apúntalo.
 
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-b2`)
+
+1. `app/(panel)/page.tsx`: junto al eyebrow «Rendimiento neto» va un botón `aria-label="Qué es el rendimiento neto"` con `Tooltip` («Antes del IRPF de la Renta: es la base sobre la que se calcula lo que pagas en la Renta.»), igual que el ⓘ de `Barras.tsx`. Se quita la línea «Antes del IRPF de la Renta» de debajo de la cifra.
+2. Orden del bloque de rendimiento: cifra grande, «≈ X € al mes de media», `Badge` del margen y la frase «De cada 100 €…».
+3. El `return` de Inicio pasa a un único `<div className="flex flex-col gap-8">` que envuelve la cabecera y el contenido (antes eran dos hijos sueltos de un `<>` sin espacio entre ellos); la separación interna entre «Resultados»/«Por hacer» en el contenedor de columnas sigue en `gap-6` (24 px), que es un espaciado distinto al de la cabecera.
+4. **Desviación apuntada:** Vela no tiene un `Badge` de tipo lila explícito; de los seis tipos (`primary`, `secondary`, `tertiary`, `destructive`, `success`, `onhold`), `tertiary` es el único que usa `--color-brand-100` (comprobado en `node_modules/@glinglo/vela-ds/dist/index.css`), así que el número de tareas pasa de `type="primary"` a `type="tertiary"`.
+5. **Comprobado:** `npm test`, `npm run typecheck`, `next build` y `next start` con `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=3`, `/?periodo=4`, `/?anio=2025` en `200`. Sin vista previa de Vercel: queda pendiente la revisión visual de Jose.
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**

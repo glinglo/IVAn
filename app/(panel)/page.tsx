@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { Badge, Card, CardHeader, ListItem, PageHeader } from "@glinglo/vela-ds";
+import { Badge, Card, CardHeader, ListItem, PageHeader, Tooltip } from "@glinglo/vela-ds";
 import { contextoPasos, cargarLibro, pygHasta, siguientesPasos } from "@/lib/libro";
 import { cascada, clasificarAvisos, pygTrimestre, salud, seriesMensuales } from "@/lib/inicio";
 import { eurosSinCentimos, hoyMadrid, nombreMes, plazoTrimestral, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
@@ -79,7 +79,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
   const numTareas = (destacado ? 1 : 0) + resto.length;
 
   return (
-    <>
+    <div className="flex flex-col gap-8">
       <div className="relative z-20">
         <PageHeader title="Hola, Jose" subtitle={`Tus resultados de ${anio}`} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
       </div>
@@ -105,16 +105,22 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
 
               <div className="flex flex-col lg:flex-row gap-5">
                 <div className="flex flex-col gap-2 lg:basis-1/3">
-                  <h3 className="text-eyebrow text-tertiary">Rendimiento neto</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-eyebrow text-tertiary">Rendimiento neto</h3>
+                    <Tooltip content="Antes del IRPF de la Renta: es la base sobre la que se calcula lo que pagas en la Renta.">
+                      <button type="button" aria-label="Qué es el rendimiento neto" className="text-tertiary">
+                        ⓘ
+                      </button>
+                    </Tooltip>
+                  </div>
                   <div className="text-display">{eurosSinCentimos(pResultados.rendimientoNeto)}</div>
-                  <div className="text-caption">Antes del IRPF de la Renta</div>
+                  <div className="text-caption">≈ {eurosSinCentimos(porMes)} al mes de media</div>
                   {margen.valor !== null && (
                     <Badge type={margen.estado === "bien" ? "success" : "onhold"} className="self-start">
                       Margen {Math.round(margen.valor * 100)} %
                     </Badge>
                   )}
                   <p className="text-body">De cada 100&nbsp;€ que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)}&nbsp;€.</p>
-                  <div className="text-caption">≈ {eurosSinCentimos(porMes)} al mes de media</div>
                 </div>
 
                 <div className="hidden lg:block w-px bg-separator" />
@@ -157,7 +163,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
           <Card className="p-5 gap-4">
             <div className="flex items-center justify-between">
               <h2 className="text-eyebrow text-tertiary">Por hacer</h2>
-              {numTareas > 0 && <Badge type="primary">{numTareas}</Badge>}
+              {numTareas > 0 && <Badge type="tertiary">{numTareas}</Badge>}
             </div>
             <PorHacerEscritorio destacado={destacado} resto={resto} ocultoHoy={ocultoHoy} hoy={hoy} />
 
@@ -175,6 +181,6 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
           </Card>
         </aside>
       </div>
-    </>
+    </div>
   );
 }
