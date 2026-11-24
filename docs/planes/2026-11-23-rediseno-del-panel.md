@@ -663,6 +663,12 @@ En la misma rama `plan/rediseno-b2` y el mismo PR #16. No se toca `lib/calculo.t
 - **Comprobado:** `npm test` (108 tests, con los nuevos de A y C), `npm run typecheck`, `next build` y `next start` (puerto 3179) con `curl` y una cookie de sesión generada con `crearToken("sesion")`: `/`, `/?periodo=1`, `/?periodo=2`, `/?periodo=4`, `/?anio=2025`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos/2026/4` y `/ajustes` dan todas `200`. En el HTML de `/`: un solo `<h1>`, «Resultados» como `<h2>`, ningún `role="tooltip"`. Con los datos reales: «Año» da 20.572 €; 1T + 2T + 3T da 18.776 € (6.044 + 6.312 + 6.420), prácticamente el acumulado al 30/09 que enseñaba la B.2 (18.778 €; la diferencia de 2 € es redondeo por trimestre en vez de redondeo del acumulado). Con 2T: subtítulo «2T · de abril a junio» y cifras solo de abril a junio (6.312 €). «Por hacer» con el badge «2». «Impuestos»: «Próximo: 4T, del 01/01 al 01/02».
 - Sin vista previa de Vercel en esta sesión: queda pendiente de que Jose compare visualmente con `InicioEscritorio3` y `PorHacerEstados` a 1440 px y 390 px.
 
+### Correcciones tras la revisión visual de Jose (24/11/2026)
+
+1. **Barras del trimestre:** con 1T…4T elegido, el gráfico enseña **solo los meses de ese trimestre** (en el 4T en curso, octubre y noviembre «sin facturar»), sin `highlight`. Con «Año», como ahora: de enero al mes actual. Así las barras cuentan lo mismo que las cifras de arriba. La nota de debajo y la fila de detalle en móvil siguen igual, sobre esos meses; por defecto, el último mes con datos del trimestre.
+2. **El «€» de «te quedan 72 €.» sigue partiéndose** en escritorio: la frase de `app/(panel)/page.tsx` aún usa espacios normales. Los dos «€» de esa frase con `\u00a0` (punto 8 de la B.3).
+3. **Los títulos de las tareas se cortan** en la columna derecha («Registrar la factura de noviemb…» y el detalle «…mándale el PDF al…»): `NoticeCard size="sm"` sí recorta a una línea. Si admite `className`, que el título y el detalle envuelvan hasta dos líneas desde IVAn; si no, para y apúntalo como cambio de Vela (y deja el recorte como está).
+
 ## Fase C · Ventas y Gastos
 
 **Ventas (`/ventas`):**
