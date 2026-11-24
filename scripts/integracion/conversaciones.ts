@@ -76,6 +76,13 @@ async function caso(nombre: string, fn: () => Promise<void>) {
   }
 }
 
+/** euros() (lib/fiscal.ts) pone un espacio de no separación antes del €: esta ayuda construye un
+ * regex a partir de un texto literal que acepta tanto ese \u00a0 como un espacio normal. */
+function reEuros(literal: string): RegExp {
+  const escapado = literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ €/g, "[ \\u00a0]€");
+  return new RegExp(escapado);
+}
+
 const enviados = (metodo = "sendMessage") => F.telegram.filter((t) => t.metodo === metodo);
 const ultimoTexto = () => String(enviados().at(-1)?.params.text ?? "");
 
@@ -434,8 +441,8 @@ async function main() {
     const g = (await db().from("gastos").select("*").eq("estado", "borrador").eq("numero_factura", "R-991")).data![0];
     gastoRestauranteId = g.id;
     const m = ultimoConBotones();
-    assert.match(String(m.params.text), /IVA 10 % sobre 40,00 € = 4,00 €/);
-    assert.match(String(m.params.text), /IVA 21 % sobre 10,00 € = 2,10 €/);
+    assert.match(String(m.params.text), reEuros("IVA 10 % sobre 40,00 € = 4,00 €"));
+    assert.match(String(m.params.text), reEuros("IVA 21 % sobre 10,00 € = 2,10 €"));
     assert.match(JSON.stringify(m.params.reply_markup), /g:uso:manutencion/);
     assert.match(JSON.stringify(m.params.reply_markup), /g:uso:cliente/);
     assert.match(JSON.stringify(m.params.reply_markup), /g:uso:personal/);
