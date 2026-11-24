@@ -67,7 +67,12 @@ export default async function Ventas({
       <PageHeader title="Ventas" subtitle={subtituloPeriodo} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
       <div className="flex flex-col gap-6">
-        <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
+        <div className="hidden lg:block">
+          <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
+        </div>
+        <div className="lg:hidden">
+          <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} fullWidth />
+        </div>
 
         <Card className="gap-2">
           <div className="text-display">{euros(base)}</div>
@@ -109,7 +114,7 @@ export default async function Ventas({
         {pendienteParalelo && (
           <ListGroup label="Pendiente">
             <ListItem
-              title={`Factura de ${nombreMes(mesPasado + "-01")} · ${pendienteParalelo.cliente}`}
+              title={`Factura de ${nombreMes(mesActual + "-01")} · ${pendienteParalelo.cliente}`}
               description="Aún no registrada en el libro"
               badge={{ label: "Pendiente", type: "onhold" }}
             />
@@ -121,9 +126,9 @@ export default async function Ventas({
         ) : (
           mesesMostrados.map((mes) => {
             const delMes = facturas.filter((f) => f.fecha.startsWith(mes));
-            const baseMes = delMes.reduce((s, f) => s + f.base, 0);
+            const totalMes = delMes.reduce((s, f) => s + f.total, 0);
             return (
-              <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(baseMes)}>
+              <ListGroup key={mes} label={nombreMes(`${mes}-01`)} aside={eurosSinCentimos(totalMes)}>
                 {delMes.map((f) => (
                   <ListItem
                     key={f.id}

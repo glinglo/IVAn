@@ -1,4 +1,4 @@
-import { Alert, Badge, Card, ListGroup, ListItem, PageHeader, StackedBar } from "@glinglo/vela-ds";
+import { Alert, Badge, Card, ListGroup, ListItem, PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro } from "@/lib/libro";
 import { euros, eurosSinCentimos, fechaES, hoyMadrid, mesAnterior, nombreMes, trimestreDe } from "@/lib/fiscal";
 import { nombreCorto } from "@/lib/texto";
@@ -6,6 +6,7 @@ import { ETIQUETA_CATEGORIA, type CategoriaGasto } from "@/lib/categorias";
 import { proveedoresQueFaltan } from "@/lib/recordatorios";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { Periodo } from "@/components/Periodo";
+import { GraficoTipoIva } from "@/components/GraficoTipoIva";
 import { db } from "@/lib/db";
 
 const CORTO_IVA: Record<string, string> = {
@@ -87,7 +88,12 @@ export default async function Gastos({
       <PageHeader title="Gastos" subtitle={subtituloPeriodo} actions={<AccionesCabecera anio={anio} anioActual={anioActual} />} />
 
       <div className="flex flex-col gap-6">
-        <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
+        <div className="hidden lg:block">
+          <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} />
+        </div>
+        <div className="lg:hidden">
+          <Periodo valor={periodo === null ? "anio" : String(periodo)} anio={anio} disponibles={disponibles} fullWidth />
+        </div>
 
         <Card className="gap-2">
           <div className="text-display">{euros(base)}</div>
@@ -160,10 +166,7 @@ export default async function Gastos({
 
         <Card className="gap-3">
           <h2 className="text-eyebrow text-tertiary">Por qué casi no hay IVA deducible</h2>
-          <StackedBar
-            aria-label="Reparto de los gastos por tipo de IVA"
-            legend
-            format={eurosSinCentimos}
+          <GraficoTipoIva
             parts={[...porTipo.entries()].map(([tipo, v]) => ({
               value: v,
               color: coloresTipo[tipo] ?? "var(--color-gray-200)",
