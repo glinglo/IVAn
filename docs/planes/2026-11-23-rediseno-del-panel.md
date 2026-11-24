@@ -943,29 +943,68 @@ Rama nueva `plan/rediseno-c2` desde `wip/v0`, con `npm install @glinglo/vela-ds@
 
 
 
-## Fase D · Impuestos
+## Fase D · Impuestos (reescrita el 24/11/2026)
 
-**`/impuestos`:**
-1. Tarjeta del trimestre abierto o próximo (fondo brand-200, radio 16):
-   - días que quedan, plazo y fecha de domiciliación (`plazoTrimestral`);
-   - 303 [71] y 130 a ingresar previstos;
-   - «Preparar el {t}T» → `/impuestos/{año}/{t}`;
-   - `Badge` «provisional» si el trimestre no ha terminado.
-2. «Presentados»: un `ListItem` por trimestre presentado, con la fecha y los importes **de `presentaciones`** y `Badge` «presentado».
-3. «Resumen anual»: 390 → `/impuestos/{año}/390`, y una línea informativa del 349.
-4. «Pagado en {año}»: IRPF a cuenta y IVA ingresado, de `presentaciones`.
+**Diseño aprobado por Jose el 24/11/2026** en el lienzo, fila «Propuesta 24/11 · Impuestos v2 (fase D)»: `ImpuestosEscritorio2` (`/impuestos`) y `TrimestreEscritorio2` (`/impuestos/2026/4`, modelo 130). En móvil, los dibujos `Impuestos` y `Trimestre` del 23/11 con los patrones de las fases B.3–C.4: las pestañas dentro de la tarjeta principal, los `Badge` debajo de la cifra, espacios de no separación en «€» y «%».
 
-**`/impuestos/[anio]/[t]`:**
-- `PageHeader` con «‹ Impuestos».
-- `SegmentedControl` en modo `tabs`: 303 · 130 · 349 (`?m=`).
-- Tarjeta «A ingresar · casilla [x]» (`text-display`) con una frase de por qué. Ejemplo del 130 a 0: «Lo pagado de 1T a 3T ya cubre el 20 % de tu rendimiento del año».
-- Si el modelo está presentado y el importe no coincide con IVAn: las dos cifras y el motivo conocido (cuota de autónomo en el 130 de la gestoría). Es la base visual del aviso B2 del plan del cierre; aquí solo se muestra.
-- **Casillas con `CopyValue`:** todas las de hoy, las que están a 0 en gris.
-  - El formato que se copia es el de la Sede: sin separador de miles y con coma decimal (`1216,02`; los negativos con `-`). Función `formatoSede(n)`, con test.
-- «Cómo presentarlo»: lista de 4 pasos (Sede → modelo → copiar casillas → decírselo al bot).
-- El 349 sigue como lista (clave, nombre, VAT, base).
+Rama `plan/rediseno-d` desde `wip/v0` (Vela 0.9.0). No se toca `lib/calculo.ts`. Sigue valiendo la «Regla técnica: Vela en páginas de servidor» y sus añadidos (`toneFor`, nada de render-props desde la página).
 
-**`/impuestos/[anio]/390`:** el contenido actual de `/anual/[anio]` con el mismo patrón (`PageHeader`, tarjetas, `CopyValue`, enlace compensar/devolver).
+### Datos
+
+1. **Migración `008_casillas_presentadas.sql`:** `alter table presentaciones add column if not exists casillas jsonb` («Casillas clave tal como se presentaron: para el 303, 110, 78, 87 y 71»).
+2. **`scripts/historico-casillas.sql`** (lo ejecuta Jose): `update presentaciones set casillas = '{"110": …, "78": …, "87": …, "71": …}' where modelo = '303' and anio = … and trimestre = …`, con el `select` de comprobación (15 filas con casillas). Valores, de los justificantes (todo negativo quedó «a compensar»):
+
+   | 303 | [110] | [78] | [87] | [71] |
+   |---|---|---|---|---|
+   | 2023 1T | 459,04 | 0 | 459,04 | −32,38 |
+   | 2023 2T | 491,42 | 0 | 491,42 | −56,44 |
+   | 2023 3T | 547,86 | 0 | 547,86 | −3,27 |
+   | 2023 4T | 551,13 | 0 | 551,13 | −26,10 |
+   | 2024 1T | 577,23 | 0 | 577,23 | −89,50 |
+   | 2024 2T | 666,73 | 462,21 | 204,52 | 0,00 |
+   | 2024 3T | 204,52 | 204,52 | 0 | 471,87 |
+   | 2024 4T | 0 | 0 | 0 | 644,97 |
+   | 2025 1T | 0 | 0 | 0 | −26,10 |
+   | 2025 2T | 26,10 | 0 | 26,10 | −274,60 |
+   | 2025 3T | 300,70 | 0 | 300,70 | −376,67 |
+   | 2025 4T | 679,93 | 0 | 679,93 | −75,60 |
+   | 2026 1T | 755,53 | 0 | 755,53 | −2,42 |
+   | 2026 2T | 2,42 | 0 | 2,42 | −0,42 |
+   | 2026 3T | 2,84 | 2,84 | 0 | 207,46 |
+
+   Solo se muestran; **no entran en ningún cálculo** de IVAn (eso es la B3 del plan del cierre, en diciembre).
+
+### Funciones (en `lib/`, todas con tests)
+
+3. **`formatoSede(n)`:** sin separador de miles y con coma decimal (`1216,02`; negativos con `-`).
+4. **`sinDatos(libro)`** y **`cargarAniosConPresentaciones()`**, como decía el apartado «Años anteriores a IVAn» (abajo).
+5. **`saldoIvaCompensar(presentaciones303)`:** recorre los 303 en orden; el [110] esperado de cada trimestre es el [87] del anterior más lo que dejó «a compensar» (−[71] si fue negativo). Si un [110] presentado es **menor** que el esperado, devuelve el trimestre y lo que falta. Test con los datos reales: 2T 2026, esperado 757,95 €, presentado 2,42 € → faltan 755,53 €. El 4T 2025 trae 2,56 € de más (sin explicar, a favor de Jose): eso no se avisa; solo se avisa lo que falta.
+6. **Frases del porqué** (`lib/impuestos.ts` o donde encaje), con tests:
+   - 303: 0 → «Lo que cobras de IVA y lo que deduces se compensan»; > 0 → «IVA cobrado menos el deducible»; < 0 → «Te sale a favor: queda para compensar».
+   - 130: [07] ≤ 0 → «Lo pagado de 1T a 3T ya cubre el 20 % de tu rendimiento del año» (en el 1T: «Tus gastos superan…»); > 0 → «20 % del rendimiento menos lo ya pagado y las retenciones».
+
+### `/impuestos`
+
+7. **Tarjeta «Próximo»** (lila, radio 16; roja como la tarjeta urgente de Inicio si quedan ≤ 10 días de plazo): eyebrow «Próximo · en {N} días» (o «Quedan {N} días» con el plazo abierto, con `cuandoPaso`), título «{t}T de {año}», plazo y domiciliación (`plazoTrimestral`), las dos cifras previstas de IVAn (303 [71] y 130 [19]) con su frase, `Badge` «Provisional» si el trimestre no ha terminado, botón «Preparar el {t}T» y, en el 4T, «También 349 y 390».
+8. **«Presentados en {año}»:** escritorio, tabla (Trimestre con enlace, Presentado, 303 con `Badge` «Ingresado» / «A compensar» / «Resultado cero», 130, `Badge` «Presentado»); móvil, lista. Debajo, en `text-caption`, «El 130 de la gestoría no incluía tu cuota de autónomo como gasto; por eso IVAn calcula otra cifra», **solo** si algún 130 presentado difiere de IVAn.
+9. **Columna derecha** (en móvil, tras «Presentados»):
+   - **Aviso del saldo** (amarillo), si `saldoIvaCompensar` encuentra algo: «A revisar en el cierre · {X} € de IVA a tu favor · La gestoría no los arrastró en el 303 del {t}T. Decidimos en enero si se compensan en el 4T o pides la devolución.»
+   - **«Pagado en {año}»:** total; «IRPF a cuenta X · IVA Y»; `BarChart` `stacked` por trimestre (IRPF + IVA ingresado), con el trimestre en curso `pending`.
+   - **«Lo pagado cada año»:** una barra por año de `presentaciones` (130 [19] + 303 positivos), el año en curso en lila con «hasta {t}T».
+   - **«Resumen anual»:** filas al 390 y al 349 con su pista.
+10. **Años sin datos** (`sinDatos`): como el apartado de abajo; además, sin aviso del saldo si no hay casillas y con «Lo pagado cada año» igual.
+
+### `/impuestos/[anio]/[t]`
+
+11. **Cabecera:** «‹ Impuestos», `h1` «{t}T de {año}» y el plazo como subtítulo.
+12. **Tarjeta principal:** título «Modelo {m} · {IVA|IRPF|UE}» y subtítulo; las pestañas 303 · 130 · 349 (`SegmentedControl` en modo pestañas, `?m=`) en la cabecera de la tarjeta, como el periodo de Inicio; «A ingresar · casilla [x]» en grande con su frase; a la derecha los `Badge` («Provisional» o «Presentado el dd/mm»; en el 130, «Cuota de autónomo incluida»). Si está presentado y no coincide con IVAn: «Presentado X € · IVAn calcula Y €» y el motivo conocido.
+13. **Casillas:** rejilla de 2 columnas (1 en móvil); cada una con su número, nombre, importe y `CopyValue` (copia `formatoSede`); a 0 en gris; resaltadas la 07 y la 19 (130) y la 71 (303). En el 303, también [110], [78] y [87] (de lo calculado; si el trimestre está presentado y hay `casillas`, las presentadas). El 349, como lista (clave, nombre, VAT, base).
+14. **Columna derecha:** «Plazo» (lila: días, fechas, domiciliación, avisos del bot); «Cómo presentarlo» (4 pasos según el modelo y «Abrir la Sede», `target="_blank"`); «Este trimestre también» (los otros modelos con su estado).
+15. **Años sin datos:** solo el resultado presentado (303 [71] y 130 [19], con la fecha) y la línea gris.
+
+### `/impuestos/[anio]/390`
+
+16. Mismo patrón: cabecera con «‹ Impuestos», tarjeta con las casillas en rejilla con `CopyValue`, y el enlace compensar/devolver. Sin datos: la línea gris, nada a cero.
 
 ### Años anteriores a IVAn (añadido el 24/11/2026)
 
@@ -984,13 +1023,124 @@ El 24/11 se cargaron en `presentaciones` los 303 y 130 de 2023, 2024 y 2025 (los
 - **Opcional, si cabe sin complicar la fase:** en `/impuestos`, abajo, «Histórico»: una fila por año (de `presentaciones`) con el 130 pagado y el 303 ingresado. Valores de referencia para el test: 2023 → 10.172,20 € y 0 €; 2024 → 8.816,37 € y 1.116,84 €; 2025 → 7.202,05 € y 0 €.
 
 **Comprueba:**
-- Test de `formatoSede`.
-- Con los datos reales: 4T 2026 con el 130 a 0 €; 1T con 1.503,78 € presentado frente a 1.216,02 € de IVAn.
-- Copiar una casilla en el móvil.
-- Tests de `sinDatos` y de `cargarAniosConPresentaciones`.
-- `/impuestos?anio=2025`: los 4 trimestres presentados con −26,10 / −274,60 / −376,67 / −75,60 € (303) y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56 € (130); «Pagado en 2025» = 7.202,05 €; ningún 0,00 € calculado.
-- `/impuestos?anio=2023` y `/impuestos/2023/1` dan `200`; `/impuestos/2023/390` no enseña casillas a cero.
+- `npm test` (con `formatoSede`, `sinDatos`, `cargarAniosConPresentaciones`, `saldoIvaCompensar` y las frases), `npm run typecheck`, `next build` y `next start` con `curl` y cookie a `/impuestos`, `/impuestos?anio=2025`, `/impuestos?anio=2023`, `/impuestos/2026/3`, `/impuestos/2026/4?m=130`, `/impuestos/2026/4?m=349`, `/impuestos/2023/1` y `/impuestos/2026/390`, todas en `200`.
+- Prueba de integración de las 56 conversaciones (cambian enlaces y textos que usa el bot, como `/panel` a un trimestre).
+- Con los datos reales: «Pagado en 2026» = 4.640,92 € (IRPF 4.433,46 · IVA 207,46); aviso de 755,53 €; 4T con 303 y 130 a 0 €; 1T con 1.503,78 € presentado frente a 1.216,02 € de IVAn; `/impuestos?anio=2025` con los 4 trimestres (−26,10 / −274,60 / −376,67 / −75,60 y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56) y «Pagado en 2025» = 7.202,05 €, sin ningún 0,00 € calculado.
+- Copiar una casilla en el móvil pega `4433,46`.
 - El selector de Impuestos ofrece 2026, 2025, 2024 y 2023; el de Inicio, Ventas y Gastos, solo 2026.
+- Vista previa a 1440 y 390 px frente a los dibujos.
+
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-d`)
+
+- **Datos:** `supabase/migrations/008_casillas_presentadas.sql` (columna `presentaciones.casillas`). `scripts/historico-casillas.sql` con los 15 trimestres de 303 de la tabla del plan. **El 130 por trimestre solo se ha podido rellenar para 2025** (1.728,18 / 2.496,92 / 1.534,39 / 1.442,56 €, los mismos que da la «Comprueba» del plan como referencia): para 2023 y 2024 el plan solo da el total anual del 130 (en `historico-ingresos.sql`, como `ingresos_acumulados`, que es otra cosa), no el desglose por trimestre, y `presentaciones` necesita una fila por trimestre. Por eso el punto opcional «Histórico» (filas anuales 130+303 de 2023-2025) **no se ha hecho**: con 2023 y 2024 sin 130 por trimestre, «Pagado en 2023/2024» en el panel saldría incompleto (solo la parte del 303). Jose puede rellenarlos más adelante con un script parecido si tiene el desglose a mano.
+- **`lib/fiscal.ts`:** `formatoSede(n)`, con test.
+- **`lib/libro.ts`:** `sinDatos(libro)`; `rangoAniosDesde(anioMin, anioActual)` (pura, con test) y `cargarAniosConPresentaciones(anioActual)` (la consulta); `cargarPresentaciones303()` y `cargarPagadoPorAnio()` (consultas, sin test, como `cargarHistoricoIngresos`). `Presentacion` gana `casillas: Casillas303 | null`.
+- **`lib/impuestos.ts` (nuevo):** `frase303`, `frase130` y `saldoIvaCompensar`, todas con tests — ninguna toca `lib/calculo.ts`. `saldoIvaCompensar` reproduce el ejemplo del plan exacto: 2T 2026, esperado 757,95 €, presentado 2,42 € → faltan 755,53 €.
+- **Importante — `casillas` fuera de la consulta compartida `cargarLibro()`:** probado primero metiendo `casillas` en el `select` de `cargarLibro` (como se hizo con `ingresos_acumulados` en la C.2), pero como `cargarLibro` la usan **todas** las páginas del panel, sin la migración 008 aplicada se caía `/`, `/ventas` y `/gastos` además de Impuestos — mucho más radio de explosión que las migraciones anteriores. Revertido: `cargarLibro` no pide `casillas` (pone `null` siempre) y las páginas de Impuestos que la necesitan la piden aparte (`cargarPresentaciones303()`, o una consulta suelta en `/impuestos/[anio]/[t]` para el trimestre concreto), **sin lanzar si falla la consulta** (al estilo de `cargarPresentaciones303`, que si la migración no está devuelve `[]` en vez de un error): así, sin la migración 008, solo se resiente lo que depende de verdad de `casillas` (el aviso del saldo y las casillas 110/78/87 presentadas, que caen al cálculo de IVAn), y el resto del panel sigue en pie. Apuntado como patrón a seguir la próxima vez que se añada una columna de uso estrecho.
+- **`components/AccionesCabecera.tsx`:** nueva prop opcional `anios` (si no se pasa, sigue con los 3 últimos de siempre); Impuestos le pasa `cargarAniosConPresentaciones(anioActual)`, Inicio/Ventas/Gastos no cambian.
+- **Componentes de cliente nuevos:** `PestanasModelo.tsx` (pestañas 303 · 130 · 349, cambia `?m=`, mismo patrón que `Periodo.tsx`) y `GraficoPagos.tsx` (`BarChart` apilado IRPF+IVA por trimestre).
+- **`/impuestos/[anio]/[t]`:** reescrita con pestañas en la cabecera de la tarjeta, cifra grande con su frase, badges a la derecha, casillas en `CopyValue` (2 columnas), 349 como lista, y la columna «Plazo»/«Cómo presentarlo» (pasos fijos por modelo, botón a `https://sede.agenciatributaria.gob.es` — no hay enlace profundo al modelo concreto, la Sede va por sesión)/«Este trimestre también». Años `sinDatos`: solo el resultado presentado y la línea gris, o «No hay datos de este trimestre» si no hay nada.
+- **`/impuestos/[anio]/390`:** mismo patrón, casillas con `CopyValue`, sin datos: mensaje explicando por qué (no `notFound()`, para no dar un 404 al pulsar el enlace del 4T cuando aún no hay 390 que calcular).
+- **`/impuestos` (índice):** tarjeta «Próximo» (`NoticeCard`, `urgent` si quedan ≤ 10 días de un plazo abierto, `brand` si no) calculada con `plazoAbierto`, igual que el paso «plazo» de `siguientesPasos`; «Presentados en {año}» (tabla/lista); columna derecha con el aviso del saldo (si `saldoIvaCompensar` encuentra algo, solo en el año en curso), «Pagado en {año}» (calculado por IVAn, con `GraficoPagos`) y «Lo pagado cada año» (de `presentaciones`, no recalculado). Años `sinDatos`: lista de lo presentado y el total, sin la tarjeta «Próximo» ni el aviso del saldo.
+- **`components/Casillas.tsx` queda sin uso** tras esta fase (las 3 páginas que lo usaban ya no lo hacen). `components/Nav.tsx` y `components/Filas.tsx` **ya estaban sin usar desde antes** de esta fase (no los importa nada): comprobado con una búsqueda de sus imports en todo `app/` y `components/`. Los tres, y el CSS antiguo que solo ellos usan, quedan listos para borrarse en la fase E sin esperar a nada más — no los he tocado porque esa fase es la que lo tiene asignado explícitamente.
+- **No verificado con los datos reales de producción:** las cifras exactas de la «Comprueba» (4.640,92 €, 1.216,02 € del 1T, etc.) no se han comprobado contra Supabase en esta sesión; la lógica está probada con los tests y la integración, pero la comprobación visual con los números reales queda para Jose en la vista previa.
+- **`npm test`** (148 tests, con los nuevos de `formatoSede`, `sinDatos`, `rangoAniosDesde` y `lib/impuestos.ts`), **`npm run typecheck`** y **`npm run build`** sin errores.
+- **`next start` + `curl`** con cookie a `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos?anio=2025`, `/impuestos?anio=2023`, `/impuestos/2026/3`, `/impuestos/2026/4?m=130`, `/impuestos/2026/4?m=349`, `/impuestos/2023/1` e `/impuestos/2026/390`: las once dan `200`, **incluso sin la migración 008 aplicada** en el Supabase de `.env.local` (gracias a que `casillas` no está en la consulta compartida). Pendiente de que Jose aplique `008_casillas_presentadas.sql` y, si quiere el histórico ya, `scripts/historico-casillas.sql`, en el SQL Editor de Supabase; con la migración aplicada, el aviso del saldo y las casillas 110/78/87 presentadas deberían aparecer.
+- **Prueba de integración de las 56 conversaciones:** todas pasan (en la base local, con la migración 008 ya aplicada por `reset-db.sh`). No hizo falta cambiar ningún enlace ni texto del bot: el único enlace de Impuestos que usa el agente (`resumen_390` → `/impuestos/{anio}/390`) ya apuntaba bien desde antes; `/panel` sigue mandando a `/` (Inicio), sin cambios.
+
+## Fase D.1 · Años anteriores con la misma estructura que el año en curso (24/11/2026)
+
+Al revisar la vista previa, `/impuestos?anio=2025` queda como una lista suelta, no como el resto del panel. Hay tres problemas:
+- la etiqueta «Presentados» queda pegada al subtítulo, porque falta el `gap-8` de la rama con datos;
+- todo va a una columna;
+- no hay gráfico ni comparativa entre años.
+
+Los datos ya están en Supabase: los importes de `presentaciones` y, desde la migración 008, las casillas del 303. Así que los años `sinDatos` pueden usar la misma maqueta que 2026. Lo único que cambia es la fuente: lo presentado en vez de lo calculado.
+
+**Regla:** en `/impuestos` y `/impuestos/[anio]/[t]` no hay dos maquetas. La rama `sinDatos` usa el mismo esqueleto (contenedor `flex flex-col gap-8`, rejilla `lg:grid-cols-[minmax(0,1fr)_340px]`, mismas tarjetas) y solo oculta lo que no tiene sentido sin facturas.
+
+### `/impuestos?anio=X` sin datos
+
+**Columna izquierda.** Tarjeta «Presentados en {año}» con la misma tabla que en 2026:
+- Trimestre: enlace a `/impuestos/{año}/{t}`.
+- Presentado: la fecha.
+- 303: importe [71] y badge («A compensar» / «Ingresado» / «Resultado cero»).
+- 130: importe [19].
+- En móvil, la misma lista con enlace que en 2026.
+- La línea gris «Presentado por la gestoría…» va dentro de la tarjeta, al pie, como `text-caption`.
+
+**Columna derecha:**
+- «Pagado en {año}»: total, «IRPF a cuenta X · IVA Y» y `GraficoPagos` por trimestre, alimentado desde `presentaciones` (130 = `importe`; IVA = `max(0, importe del 303)`). 2025 → IRPF 7.202,05 € · IVA 0 €.
+- «Lo pagado cada año»: la misma tarjeta, con el año elegido resaltado.
+- Sin «Próximo», sin aviso del saldo y sin «Resumen anual», porque no hay 390 que calcular.
+
+**Mejora también para 2026:** en la tabla «Presentados», que las columnas 303 y 130 enseñen el importe además del badge. Hoy en escritorio solo sale el badge y hay que entrar al trimestre para ver la cifra.
+
+### `/impuestos/[anio]/[t]` sin datos
+
+- Mismo esqueleto que con datos: tarjeta con las pestañas 303 · 130 y columna derecha. No hay pestaña 349, porque de esos años no hay facturas.
+- Subtítulo: «Presentado el {fecha}», en vez de «Plazo: del … al …», que no aporta nada en un trimestre cerrado.
+- **303:** cifra grande [71] con `frase303`, y la rejilla de casillas con `CopyValue` usando las casillas presentadas ([110], [78], [87], [71]). Sin casillas calculadas.
+- **130:** cifra grande [19], el importe presentado. Sin desglose, porque no lo tenemos.
+- Columna derecha: solo la línea gris. Sin «Cómo presentarlo» ni «Este trimestre también».
+
+**Comprueba:**
+- `/impuestos?anio=2025` a 1440 px: dos columnas como 2026. Tabla con −26,10 / −274,60 / −376,67 / −75,60 y 1.728,18 / 2.496,92 / 1.534,39 / 1.442,56. «Pagado en 2025» = 7.202,05 € con gráfico.
+- `/impuestos?anio=2024`: 303 del 3T 471,87 «Ingresado» y del 4T 644,97 «Ingresado». «Pagado en 2024» = 9.933,21 € (IRPF 8.816,37 · IVA 1.116,84).
+- `/impuestos/2024/2`: [110] 666,73 · [78] 462,21 · [87] 204,52 · [71] 0,00.
+- Móvil a 390 px: todo apilado, con la misma separación que 2026.
+- `npm test`, `npm run typecheck`, `next build` y `curl` a las once rutas de la fase D.
+
+### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-d`)
+
+- **`/impuestos` unificada:** una sola función de página; la rama `sinDatos` ya no tiene su propio `return` con otra maqueta. Se calcula una lista común `filas: FilaTrimestre[]` (trimestre, fecha, `[71]`, `[19]`, si el 130 está presentado) desde `resumenTrimestre` cuando hay datos, o desde `libro.presentaciones` cuando no, y el resto de la página (tabla/lista «Presentados», `GraficoPagos`, «Lo pagado cada año») es el mismo JSX para los dos casos; solo «Próximo», el aviso del saldo y «Resumen anual» se condicionan a `datos`.
+- **Mejora de la tabla «Presentados» (también en 2026):** las columnas 303 y 130 llevan ahora el `Badge` y el importe juntos (antes solo el `Badge`; había que entrar al trimestre para ver la cifra).
+- **`/impuestos/[anio]/[t]` unificada** igual: la tarjeta principal, las pestañas y la rejilla de casillas son el mismo marcado con y sin datos. Cambios por rama:
+  - `PestanasModelo` gana la prop `modelos` (opcional): sin datos, solo `["303", "130"]` (no hay 349 de esos años).
+  - Subtítulo de la cabecera: el plazo con datos, «Presentado el {fecha}» sin ellos.
+  - Casillas: con datos, la rejilla completa de siempre; sin datos, solo `[110]`/`[78]`/`[87]`/`[71]` tal como se presentaron (si hay `casillas`, vía la misma consulta aparte de la fase D) o, si no hay casillas guardadas, un único `CopyValue` con el resultado presentado.
+  - Columna derecha: con datos, «Plazo»/«Cómo presentarlo»/«Este trimestre también»; sin datos, solo la línea gris, sin tarjetas.
+- **Comprobado con los datos reales de producción** (la migración 008 y `historico-casillas.sql` ya estaban aplicados en Supabase cuando he probado esto, a diferencia de la fase D): `/impuestos?anio=2025` da «Pagado en 2025» = 7.202,05 € y la tabla con −26,10 €/1.728,18 € en el 1T (y el resto de trimestres, igual que pide la «Comprueba»); `/impuestos?anio=2024` da «Pagado en 2024» = 9.933,21 € (IRPF 8.816,37 € · IVA 1.116,84 €); `/impuestos/2024/2` da `[110]` 666,73 €, `[78]` 462,21 € y `[71]` 0,00 €. Las cuatro cifras, exactas a las de la «Comprueba» del plan.
+- **`npm test`** (148, sin tests nuevos: esta fase no añade funciones, solo reordena las páginas), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a las trece rutas (las once de la fase D más `/impuestos?anio=2024` e `/impuestos/2024/2`): todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
+- No he podido comprobar la vista a 390 px con una herramienta de captura de pantalla (no disponible en esta sesión): comprobado por lectura del HTML servido que la rama sin datos usa la misma rejilla (`lg:grid-cols-[minmax(0,1fr)_340px]`) y el mismo `flex flex-col gap-8` que 2026, así que en móvil (sin el prefijo `lg:`) debería apilarse igual. Pendiente de que Jose lo confirme en el Mac o en el móvil.
+
+### Retoque D.1: en 2026, lo presentado manda sobre lo calculado (24/11/2026)
+
+En el año en curso, `/impuestos` usa `m130.aIngresar` y `m303.c71` (el cálculo de IVAn) para:
+- la tabla «Presentados»;
+- «Pagado en {año}»;
+- `GraficoPagos`.
+
+El 1T de 2026 se presentó con 1.503,78 € de 130, pero IVAn calcula 1.216,02 € porque cuenta la cuota de autónomo como gasto. Así que la tabla «Presentados» enseña una cifra que no se presentó, y el «Pagado» suma lo que no se pagó.
+
+**Regla:** si el trimestre tiene fila en `presentaciones` con `importe` no nulo, se usa ese importe:
+- para el 130, `importe`;
+- para el 303, `importe` ([71]); en «Pagado» y en el gráfico, `max(0, importe)`.
+
+El cálculo de IVAn solo se usa para los trimestres sin presentar (hoy, el 4T), que siguen marcados como `pendiente` en el gráfico. Es la misma fuente que los años sin datos: la rama con datos solo añade lo calculado donde falta lo presentado.
+
+- **`/impuestos`:**
+  - Tabla, «Pagado en {año}» y gráfico con esa regla.
+  - La nota «El 130 de la gestoría no incluía tu cuota de autónomo como gasto…» se queda, con `algunDifiere` como ahora.
+  - «Lo pagado cada año» ya sale de `presentaciones`; no cambia.
+- **`/impuestos/[anio]/[t]` con datos y el modelo ya presentado:**
+  - La cifra grande es la presentada.
+  - Si difiere, la línea de debajo pasa a «IVAn calcula X € (cuenta tu cuota de autónomo como gasto)», en vez de «Presentado X · IVAn calcula Y».
+  - Las casillas del 130 siguen siendo las calculadas, para ver de dónde sale la diferencia. La [19] se titula «Resultado según IVAn».
+- **Sin presentar:** igual que ahora.
+
+**Comprueba:**
+- `/impuestos` (2026): tabla 1T 130 = 1.503,78 €. «Pagado en 2026» = **4.640,92 €** (IRPF 4.433,46 · IVA 207,46).
+- `/impuestos/2026/1?m=130`: cifra grande 1.503,78 € y «IVAn calcula 1.216,02 €…».
+- 2025 y 2024 siguen como en la D.1.
+- `npm test`, `npm run typecheck`, `next build` y `curl` a las trece rutas.
+
+#### Notas de ejecución (Claude Code, 24/11/2026, rama `plan/rediseno-d`)
+
+- **`/impuestos`:** en la rama `datos`, cada trimestre usa `p303?.importe ?? m303.c71` y `p130?.importe ?? m130.aIngresar` (en vez de siempre lo calculado) para la fila de la tabla, `irpfAnio`/`ivaAnio` y `GraficoPagos`. `pendiente` en el gráfico pasa de "es el trimestre de hoy" a "no tiene `303.importe` presentado", que es justo el 4T mientras no se presente. `algunDifiere` sigue comparando contra el 130 calculado, sin cambios.
+- **`/impuestos/[anio]/[t]`:** separado `calculado` (lo que da `modelo303`/`modelo130`) de `aIngresarGrande` (lo presentado si `presentadoEste`, si no lo calculado); `frase303`/`frase130` siguen leyendo `calculado`, no la cifra grande. La línea de diferencia pasa a «IVAn calcula X €» (con «(cuenta tu cuota de autónomo como gasto)» solo en el 130, como pedía el plan); la rejilla de casillas del 130 sigue viniendo de `calculado` sin tocar, con la [07] retitulada «Resultado según IVAn». El 303 no cambia su rejilla de casillas (ya usaba lo presentado en 110/78/87 desde la D).
+- **Comprobado con los datos reales:** `/impuestos` (2026) → 1T 130 = 1.503,78 € en la tabla, «Pagado en 2026» = 4.640,92 € (IRPF 4.433,46 € · IVA 207,46 €), igual que pide la «Comprueba». `/impuestos/2026/1?m=130` → cifra grande 1.503,78 € y la línea «IVAn calcula X € (cuenta tu cuota de autónomo como gasto)». **La X de esa línea da 1.208,93 €, no los 1.216,02 € del plan**: la cifra exacta depende de la cuota de autónomo y los gastos de enero-marzo tal como están en Supabase en el momento de comprobarlo, que ha podido cambiar entre que se escribió el plan y esta ejecución (unas horas después, el mismo día). La lógica es la correcta (lo presentado manda, lo calculado se explica con el motivo); la cifra exacta no se ha forzado a coincidir. 2025 y 2024 siguen iguales que en la D.1 (comprobado, sin cambios).
+- **`npm test`** (148, sin tests nuevos: este retoque no añade funciones de `lib/`, solo cambia qué datos usan las páginas), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a las trece rutas de la D.1 más `/impuestos/2026/1` y `/impuestos/2026/1?m=130`: todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
 
 ## Fase E · Segundo nivel y limpieza
 

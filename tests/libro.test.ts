@@ -4,7 +4,9 @@ import {
   cuandoPaso,
   dependencia,
   proximaFactura,
+  rangoAniosDesde,
   siguientesPasos,
+  sinDatos,
   type ContextoPasos,
   type FacturaLista,
   type HistoricoIngreso,
@@ -287,5 +289,23 @@ describe("dependencia", () => {
 
   it("sin facturas, null", () => {
     expect(dependencia(libro({ facturas: [] }))).toBeNull();
+  });
+});
+
+describe("sinDatos", () => {
+  it("sin facturas ni gastos: true", () => {
+    expect(sinDatos(libro({ facturas: [], gastos: [] }))).toBe(true);
+  });
+  it("con alguna factura: false", () => {
+    expect(sinDatos(libro({ facturas: [factura()], gastos: [] }))).toBe(false);
+  });
+});
+
+describe("rangoAniosDesde", () => {
+  it("del actual al más antiguo, descendente", () => {
+    expect(rangoAniosDesde(2023, 2026)).toEqual([2026, 2025, 2024, 2023]);
+  });
+  it("mismo año: solo él", () => {
+    expect(rangoAniosDesde(2026, 2026)).toEqual([2026]);
   });
 });
