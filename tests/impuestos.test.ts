@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { frase130, frase303, saldoIvaCompensar } from "../lib/impuestos";
+import { frase130, frase303, resultado130Mostrado, saldoIvaCompensar } from "../lib/impuestos";
 
 describe("frase303", () => {
   it("resultado cero", () => {
@@ -66,5 +66,17 @@ describe("saldoIvaCompensar", () => {
 
   it("sin presentaciones, null", () => {
     expect(saldoIvaCompensar([])).toBeNull();
+  });
+});
+
+describe("resultado130Mostrado", () => {
+  it("resultado negativo: a ingresar 0, adelantado de más con el valor absoluto", () => {
+    expect(resultado130Mostrado(-150.32)).toEqual({ aIngresar: 0, adelantadoDeMas: 150.32 });
+  });
+  it("resultado positivo: a ingresar tal cual, sin adelantado", () => {
+    expect(resultado130Mostrado(1216.02)).toEqual({ aIngresar: 1216.02, adelantadoDeMas: null });
+  });
+  it("resultado cero: a ingresar 0, sin adelantado", () => {
+    expect(resultado130Mostrado(0)).toEqual({ aIngresar: 0, adelantadoDeMas: null });
   });
 });

@@ -89,6 +89,16 @@ export default async function ComoSeCalcula({ searchParams }: { searchParams: Pr
           <p className="text-caption text-tertiary">Suma de las bases de tus facturas. El IVA que cobras no es tuyo.</p>
         </div>
 
+        {p.subvenciones > 0 && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between text-body">
+              <span>Subvención del Mac (Kit Digital)</span>
+              <span>{eurosSinCentimos(p.subvenciones)}</span>
+            </div>
+            <p className="text-caption text-tertiary">Se imputa como ingreso al mismo ritmo que se amortiza el Mac.</p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between text-body">
             <span>Gastos con factura</span>
