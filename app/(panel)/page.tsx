@@ -133,6 +133,11 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                 <div className="flex flex-col gap-2 lg:basis-2/3">
                   <h3 className="text-eyebrow text-tertiary">De lo facturado al rendimiento</h3>
                   <Cascada filas={filasCascada} />
+                  {pResultados.subvenciones > 0 && (
+                    <p className="text-caption text-tertiary">
+                      Incluye {eurosSinCentimos(pResultados.subvenciones)} de la subvención del Mac (Kit Digital), ya en el rendimiento neto.
+                    </p>
+                  )}
 
                   <div className="h-px bg-separator my-1" />
 

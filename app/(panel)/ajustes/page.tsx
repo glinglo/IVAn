@@ -1,6 +1,6 @@
 import { PageHeader, ListGroup, ListItem, Badge, NoticeStrip } from "@glinglo/vela-ds";
 import { getAjustes, getClientes, db } from "@/lib/db";
-import { amortizacionDelAnio, type BienCalc } from "@/lib/calculo";
+import { amortizacionDelAnio, subvencionesDelAnio, type BienCalc } from "@/lib/calculo";
 import { euros, fechaES, hoyMadrid } from "@/lib/fiscal";
 import { modoParalelo, siguienteNumero } from "@/lib/externas";
 
@@ -29,12 +29,18 @@ export default async function Ajustes() {
   const [ajustes, clientes, bienesRes, cuotasRes] = await Promise.all([
     getAjustes(),
     getClientes(),
-    db().from("bienes_inversion").select("descripcion, fecha_compra, base, pct_anual").order("fecha_compra"),
+    db().from("bienes_inversion").select("descripcion, fecha_compra, base, pct_anual, subvencion").order("fecha_compra"),
     db().from("cuotas_autonomo").select("mes", { count: "exact", head: true }).gte("mes", `${anioActual}-01-01`).lte("mes", `${anioActual}-12-31`),
   ]);
-  if (bienesRes.error) throw bienesRes.error;
   if (cuotasRes.error) throw cuotasRes.error;
-  const bienes = (bienesRes.data ?? []) as { descripcion: string; fecha_compra: string; base: number; pct_anual: number }[];
+  // Si falta la columna subvencion (migración 009 sin aplicar), vuelve a pedir sin ella.
+  let bienesData: { descripcion: string; fecha_compra: string; base: number; pct_anual: number; subvencion?: number }[] | null = bienesRes.data;
+  if (bienesRes.error) {
+    const retry = await db().from("bienes_inversion").select("descripcion, fecha_compra, base, pct_anual").order("fecha_compra");
+    if (retry.error) throw retry.error;
+    bienesData = retry.data;
+  }
+  const bienes = (bienesData ?? []) as { descripcion: string; fecha_compra: string; base: number; pct_anual: number; subvencion?: number }[];
   const finAnio = `${anioActual}-12-31`;
 
   const quienEmite = modoParalelo(ajustes, hoy)
@@ -69,12 +75,23 @@ export default async function Ajustes() {
           <ListItem title="Sin bienes registrados" />
         ) : (
           bienes.map((b) => {
-            const bienCalc: BienCalc = { fecha_compra: b.fecha_compra, base: b.base, pct_anual: b.pct_anual };
+            const bienCalc: BienCalc = { fecha_compra: b.fecha_compra, base: b.base, pct_anual: b.pct_anual, subvencion: b.subvencion ?? 0 };
+            const subvencion = b.subvencion ?? 0;
             return (
               <ListItem
                 key={`${b.descripcion}-${b.fecha_compra}`}
                 title={b.descripcion}
-                description={`Comprado el ${fechaES(b.fecha_compra)} · base ${euros(b.base)} · ${b.pct_anual} % anual`}
+                description={
+                  <>
+                    Comprado el {fechaES(b.fecha_compra)} · base {euros(b.base)} · {b.pct_anual} % anual
+                    {subvencion > 0 && (
+                      <>
+                        <br />
+                        Subvención {euros(subvencion)} · se imputan {euros(subvencionesDelAnio([bienCalc], finAnio))} este año
+                      </>
+                    )}
+                  </>
+                }
                 value={euros(amortizacionDelAnio([bienCalc], finAnio))}
               />
             );

@@ -92,10 +92,18 @@ export async function cargarLibro(anio: number): Promise<Libro> {
       .lte("fecha", hasta)
       .order("fecha", { ascending: false }),
     db().from("cuotas_autonomo").select("mes, importe").gte("mes", desde).lte("mes", hasta),
-    db().from("bienes_inversion").select("fecha_compra, fecha_aproximada, base, pct_anual"),
+    db().from("bienes_inversion").select("fecha_compra, fecha_aproximada, base, pct_anual, subvencion"),
     db().from("presentaciones").select("modelo, anio, trimestre, importe, fecha").eq("anio", anio),
   ]);
-  for (const r of [f, g, c, b, p]) if (r.error) throw r.error;
+  for (const r of [f, g, c, p]) if (r.error) throw r.error;
+  // Si falta la columna subvencion (migración 009 sin aplicar), vuelve a pedir sin ella: que no
+  // rompa todo el panel por un dato que de momento solo usa un bien.
+  let bienesData: { fecha_compra: string; fecha_aproximada: boolean; base: number; pct_anual: number; subvencion?: number }[] | null = b.data;
+  if (b.error) {
+    const retry = await db().from("bienes_inversion").select("fecha_compra, fecha_aproximada, base, pct_anual");
+    if (retry.error) throw retry.error;
+    bienesData = retry.data;
+  }
 
   type FilaFactura = Omit<FacturaLista, "cliente" | "nif_cliente" | "pais_cliente"> & {
     clientes: { nombre: string; nif: string | null; pais: string } | null;
@@ -108,10 +116,11 @@ export async function cargarLibro(anio: number): Promise<Libro> {
   }));
   const gastos = ((g.data ?? []) as GastoLista[]).map((x) => nums(x, ["base", "iva", "manutencion_limite"]));
   const cuotas = new Map((c.data ?? []).map((r) => [String(r.mes).slice(0, 7), Number(r.importe)]));
-  const bienes = (b.data ?? []).map((x) => ({
+  const bienes = (bienesData ?? []).map((x) => ({
     fecha_compra: x.fecha_compra as string,
     base: Number(x.base),
     pct_anual: Number(x.pct_anual),
+    subvencion: Number(x.subvencion ?? 0),
     aproximada: Boolean(x.fecha_aproximada),
   }));
   const presentaciones = ((p.data ?? []) as Presentacion[]).map((x) => ({

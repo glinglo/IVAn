@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { modelo130, modelo303, modelo349, nifComunitario, pyg, type DatosCalc } from "../lib/calculo";
+import { modelo130, modelo303, modelo349, nifComunitario, pyg, subvencionesDelAnio, type DatosCalc } from "../lib/calculo";
 
 const base = (cuota: number): DatosCalc => ({
   facturas: datos.facturas as DatosCalc["facturas"],
@@ -53,5 +53,27 @@ describe("Hoja de cálculo (cuota 452 €/mes)", () => {
     expect(nifComunitario("123456789", "GR")).toEqual({ pais: "EL", numero: "123456789" });
     const s = modelo349(d, 2026, 1).find((x) => x.clave === "S")!;
     expect(s).toMatchObject({ pais: "FI", numero: "26899624" });
+  });
+});
+
+describe("Subvención de capital (Kit Digital del Mac)", () => {
+  const mac = { fecha_compra: "2025-08-20", base: 2399.0, pct_anual: 26, subvencion: 1000 };
+
+  it("subvencionesDelAnio: 260 € en 2026, 65 € hasta el 1T", () => {
+    expect(subvencionesDelAnio([mac], "2026-12-31")).toBe(260);
+    expect(subvencionesDelAnio([mac], "2026-03-31")).toBe(65);
+  });
+
+  it("un bien sin subvención da 0", () => {
+    expect(subvencionesDelAnio([{ fecha_compra: "2025-01-01", base: 2399.08, pct_anual: 26 }], "2026-12-31")).toBe(0);
+  });
+
+  it("pyg y el 130 del 4T incluyen la subvención en los ingresos y el rendimiento", () => {
+    const conSubvencion: DatosCalc = { ...base(452), bienes: [mac] };
+    const p = pyg(conSubvencion, "2026-12-31");
+    expect(p.subvenciones).toBe(260);
+    expect(p.rendimientoNeto).toBe(20549.28); // 20302,26 sin subvención + 247,02 (260 € menos el 5 % de la propia subvención)
+    const m130 = modelo130(conSubvencion, 2026, 4);
+    expect(m130.c01).toBe(29720); // 29460 + 260
   });
 });
