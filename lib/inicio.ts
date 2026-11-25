@@ -2,7 +2,7 @@
 // de impuestos y cuota. Funciones puras: usan `pyg` y `meses` de `lib/calculo.ts` sin modificarlo.
 
 import type { Libro, Paso } from "./libro";
-import { meses, modelo130, pyg, type PyG } from "./calculo";
+import { meses, pyg, type PyG } from "./calculo";
 import { rangoTrimestre, round2 } from "./fiscal";
 
 export interface MesSerie {
@@ -114,31 +114,6 @@ export function salud(libro: Libro, p: ReturnType<typeof pyg>): Indicador[] {
     { clave: "gastos", valor: gastosSobreVentas, estado: gastosSobreVentas <= 0.2 ? "bien" : "atencion" },
     { clave: "dependencia", valor: dependencia, estado: dependencia >= 0.7 ? "riesgo" : "bien", cliente: clienteTop },
   ];
-}
-
-export interface EstadoCuota {
-  cuotaPagada: number;
-  pagado130: { importe: number; estimado: boolean };
-}
-
-/** Cuota de autónomo pagada y 130 pagado en los trimestres cerrados del periodo, con los importes
- * reales de `presentaciones` cuando se conocen. */
-export function estadoYCuota(libro: Libro, hasta: string): EstadoCuota {
-  const p = pyg(libro.datos, hasta);
-  const anio = Number(hasta.slice(0, 4));
-  let importe = 0;
-  let estimado = false;
-  for (let t = 1; t <= 4; t++) {
-    if (rangoTrimestre(anio, t).hasta > hasta) break;
-    const real = libro.datos.pagado130(anio, t);
-    if (real !== null) {
-      importe = round2(importe + real);
-    } else {
-      estimado = true;
-      importe = round2(importe + modelo130(libro.datos, anio, t).aIngresar);
-    }
-  }
-  return { cuotaPagada: p.seguridadSocial, pagado130: { importe, estimado } };
 }
 
 export interface Avisos {

@@ -27,7 +27,7 @@ export default async function PanelLayout({ children }: { children: React.ReactN
           <NavMovil trimestreAviso={trimestreAviso} />
         </Suspense>
       }
-      mainClassName="app lg:max-w-7xl"
+      mainClassName="max-w-[560px] mx-auto px-4 pt-4 pb-24 lg:max-w-7xl"
     >
       {children}
     </AppShell>

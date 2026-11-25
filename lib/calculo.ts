@@ -85,6 +85,13 @@ export function amortizacionDelAnio(bienes: BienCalc[], hasta: string): number {
   return round2(bienes.reduce((s, b) => s + amortizacionAcumulada(b, hasta) - amortizacionAcumulada(b, finAnterior), 0));
 }
 
+/** La amortización del año (como `amortizacionDelAnio`), bien a bien, en el mismo orden que
+ * `bienes` (para listarla en el panel, p. ej. en «Cómo se calcula»). */
+export function amortizacionDelAnioPorBien(bienes: BienCalc[], hasta: string): number[] {
+  const finAnterior = `${Number(hasta.slice(0, 4)) - 1}-12-31`;
+  return bienes.map((b) => round2(amortizacionAcumulada(b, hasta) - amortizacionAcumulada(b, finAnterior)));
+}
+
 /** Subvención de capital acumulada de un bien hasta una fecha: en la misma proporción en que se
  * amortiza (art. 14.1.b LIRPF, norma de valoración 18.ª del PGC). */
 function subvencionAcumulada(b: BienCalc, hasta: string): number {
