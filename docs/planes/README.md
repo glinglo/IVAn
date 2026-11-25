@@ -30,6 +30,7 @@ Reglas:
 | [Retoques tras la puesta en marcha: aviso de fin de mes con gastos](2026-11-23-retoques-tras-la-puesta-en-marcha.md) | Hecho | 1 (antes del 28/11) |
 | [Rediseño del panel con Vela (fases A–E)](2026-11-23-rediseno-del-panel.md) | Aprobado | 2 (después de Vela 0.3.0) |
 | [Subvención del Mac (Kit Digital «Puesto de trabajo seguro»)](2026-11-25-subvencion-del-mac.md) | Aprobado | 1 (antes del cierre del 4T) |
+| [Panel v4: tu negocio en un vistazo, menú en móvil, Impuestos con filtros y campo de titular (fases G.1–G.4)](2026-11-25-panel-v4-y-titular.md) | Aprobado | 2 |
 
 ## Plantilla
 
