@@ -159,7 +159,10 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
               </div>
 
               <p className="text-caption text-tertiary">
-                El IVA no cuenta: no es tuyo. La Renta ajusta el IRPF: puede salir a pagar o a devolver.
+                El IVA no cuenta: no es tuyo. La Renta ajusta el IRPF: puede salir a pagar o a devolver.{" "}
+                <a href={`/detalle/como-se-calcula${periodo ? `?anio=${anio}&periodo=${periodo}` : `?anio=${anio}`}`} className="text-link-secondary">
+                  Cómo se calcula ›
+                </a>
               </p>
 
               <div className="h-px bg-separator" />
@@ -182,6 +185,12 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                   <a href={`/gastos?anio=${anio}`} className="flex flex-col">
                     <span>En qué se van los gastos</span>
                     <span className="text-tertiary">{gastosPista}</span>
+                  </a>
+                </li>
+                <li>
+                  <a href={`/detalle/como-se-calcula?anio=${anio}`} className="flex flex-col">
+                    <span>Cómo se calcula</span>
+                    <span className="text-tertiary">De lo facturado a lo que te queda</span>
                   </a>
                 </li>
               </ul>
@@ -208,6 +217,9 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
               </li>
               <li>
                 <ListItem title="En qué se van los gastos" description={gastosPista} href={`/gastos?anio=${anio}`} chevron />
+              </li>
+              <li>
+                <ListItem title="Cómo se calcula" description="De lo facturado a lo que te queda" href={`/detalle/como-se-calcula?anio=${anio}`} chevron />
               </li>
             </ul>
           </Card>

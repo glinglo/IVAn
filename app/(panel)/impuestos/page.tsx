@@ -8,7 +8,7 @@ import {
   sinDatos,
 } from "@/lib/libro";
 import { diasEntre, euros, eurosSinCentimos, fechaES, hoyMadrid, plazoAbierto, plazoTrimestral, trimestreDe } from "@/lib/fiscal";
-import { frase130, frase303, saldoIvaCompensar } from "@/lib/impuestos";
+import { frase130, frase303, resultado130Mostrado, saldoIvaCompensar } from "@/lib/impuestos";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { GraficoPagos } from "@/components/GraficoPagos";
 
@@ -50,11 +50,13 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
       const p303 = libro.presentaciones.find((p) => p.modelo === "303" && p.trimestre === x.t);
       const p130 = libro.presentaciones.find((p) => p.modelo === "130" && p.trimestre === x.t);
       if (p130?.importe !== null && p130?.importe !== undefined && Math.abs(p130.importe - x.m130.aIngresar) > 0.01) algunDifiere = true;
+      // El 130 no sale a devolver: aunque lo presentado (o calculado) sea negativo, lo ingresado es
+      // 0,00 € (se recupera en la Renta, no aquí). Nunca se suma ni se enseña en negativo.
       return {
         t: x.t,
         fecha: p303?.fecha ?? p130?.fecha ?? null,
         c71: p303?.importe ?? x.m303.c71,
-        importe130: p130?.importe ?? x.m130.aIngresar,
+        importe130: resultado130Mostrado(p130?.importe ?? x.m130.aIngresar).aIngresar,
         presentado130: x.presentado("130"),
         pendiente: p303?.importe === null || p303?.importe === undefined,
       };
@@ -85,7 +87,7 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
           t,
           fecha: p303?.fecha ?? p130?.fecha ?? null,
           c71: p303?.importe ?? null,
-          importe130: p130?.importe ?? null,
+          importe130: p130?.importe !== null && p130?.importe !== undefined ? resultado130Mostrado(p130.importe).aIngresar : null,
           presentado130: p130 ? true : null,
         };
       })
@@ -97,6 +99,7 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
 
   const pagadoPorAnio = await cargarPagadoPorAnio();
   const maxPagado = Math.max(...pagadoPorAnio.map((x) => x.total), 1);
+  const resultado130Proximo = proximo ? resultado130Mostrado(resumenTrimestre(libro, proximo.t).m130.c07) : null;
 
   return (
     <div className="flex flex-col gap-8">
@@ -116,7 +119,13 @@ export default async function Impuestos({ searchParams }: { searchParams: Promis
                   <br />
                   303: {euros(resumenTrimestre(libro, proximo.t).m303.c71)} · {frase303(resumenTrimestre(libro, proximo.t).m303.c71)}
                   <br />
-                  130: {euros(resumenTrimestre(libro, proximo.t).m130.c07)} · {frase130(resumenTrimestre(libro, proximo.t).m130.c07, proximo.t)}
+                  130: {euros(resultado130Proximo!.aIngresar)} · {frase130(resumenTrimestre(libro, proximo.t).m130.c07, proximo.t)}
+                  {resultado130Proximo!.adelantadoDeMas !== null && (
+                    <>
+                      <br />
+                      Has adelantado {euros(resultado130Proximo!.adelantadoDeMas)} de más: se recuperan en la Renta.
+                    </>
+                  )}
                   {proximo.t === 4 && (
                     <>
                       <br />

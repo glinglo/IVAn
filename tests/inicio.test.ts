@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { avisosVisibles, cascada, clasificarAvisos, estadoYCuota, pygTrimestre, salud, seriesMensuales } from "../lib/inicio";
+import { avisosVisibles, cascada, clasificarAvisos, pygTrimestre, salud, seriesMensuales } from "../lib/inicio";
 import { pyg, type DatosCalc } from "../lib/calculo";
 import type { Ajustes } from "../lib/db";
 import type { Libro, Paso } from "../lib/libro";
@@ -202,21 +202,5 @@ describe("clasificarAvisos + avisosVisibles, 28/11", () => {
     const r = avisosVisibles({ destacado, resto, oculto: false });
     expect(r.tarjeta?.clave).toBe("facturar");
     expect(r.franja).toHaveLength(1);
-  });
-});
-
-describe("estadoYCuota", () => {
-  it("usa el calculado cuando no hay importe real", () => {
-    const l = libro();
-    const r = estadoYCuota(l, "2026-12-31");
-    expect(r.pagado130.estimado).toBe(true);
-    expect(r.pagado130.importe).toBeGreaterThan(0);
-  });
-
-  it("usa el importe real cuando está presentado", () => {
-    const l = libro({ datos: { ...datosCalc(), pagado130: (_a, t) => (t === 1 ? 1500 : null) } });
-    const r = estadoYCuota(l, "2026-06-30");
-    expect(r.pagado130.estimado).toBe(true);
-    expect(r.pagado130.importe).toBeGreaterThan(1500);
   });
 });

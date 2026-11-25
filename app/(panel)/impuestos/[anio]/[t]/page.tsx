@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Badge, Button, Card, CardHeader, CopyValue, ListGroup, ListItem, PageHeader } from "@glinglo/vela-ds";
 import { cargarLibro, resumenTrimestre, sinDatos, type Casillas303 } from "@/lib/libro";
 import { euros, fechaES, formatoSede, plazoTrimestral } from "@/lib/fiscal";
-import { frase130, frase303 } from "@/lib/impuestos";
+import { frase130, frase303, resultado130Mostrado } from "@/lib/impuestos";
 import { PestanasModelo } from "@/components/PestanasModelo";
 import { db } from "@/lib/db";
 
@@ -90,18 +90,25 @@ export default async function Trimestre({
   let aIngresarGrande: number | null = null;
   let casillaGrande = "";
   let fraseGrande = "";
+  let rawGrande: number | null = null; // el valor real (el 130 puede salir negativo: [07], nunca [19])
   if (modeloFinal === "303") {
     calculado = datos ? m303!.c71 : null;
     // Si ya está presentado, manda lo presentado (lo que de verdad se pagó); si no, lo calculado.
-    aIngresarGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p303?.importe ?? 0);
+    rawGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p303?.importe ?? 0);
+    aIngresarGrande = rawGrande;
     casillaGrande = "71";
     fraseGrande = datos ? frase303(calculado!) : "";
   } else if (modeloFinal === "130") {
     calculado = datos ? m130!.c07 : null;
-    aIngresarGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p130?.importe ?? 0);
+    rawGrande = datos ? (presentadoEste ? p?.importe ?? calculado : calculado) : (p130?.importe ?? 0);
+    // El 130 no sale a devolver: si el resultado es negativo, se presenta tal cual en la [07], pero
+    // la [19] (lo que de verdad se ingresa) es 0,00 €.
+    aIngresarGrande = resultado130Mostrado(rawGrande ?? 0).aIngresar;
     casillaGrande = "19";
     fraseGrande = datos ? frase130(calculado!, t) : "";
   }
+
+  const adelantadoDeMas = modeloFinal === "130" && rawGrande !== null ? resultado130Mostrado(rawGrande).adelantadoDeMas : null;
 
   const difierePresentado =
     datos && presentadoEste && calculado !== null && p?.importe !== null && p?.importe !== undefined && Math.abs(p.importe - calculado) > 0.01;
@@ -137,6 +144,9 @@ export default async function Trimestre({
                   <div className="text-caption text-tertiary">A ingresar · casilla [{casillaGrande}]</div>
                   <div className="text-display">{euros(aIngresarGrande ?? 0)}</div>
                   {fraseGrande && <p className="text-body">{fraseGrande}</p>}
+                  {adelantadoDeMas !== null && (
+                    <p className="text-body">Has adelantado {euros(adelantadoDeMas)} de más: se recuperan en la Renta.</p>
+                  )}
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge type={badgeEstado.type}>{badgeEstado.label}</Badge>

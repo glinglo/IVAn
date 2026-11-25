@@ -19,6 +19,20 @@ export function frase130(c07: number, t: number): string {
   return "20 % del rendimiento menos lo ya pagado y las retenciones";
 }
 
+export interface Resultado130Mostrado {
+  /** La [19]: nunca negativa. */
+  aIngresar: number;
+  /** Si el resultado ([07], presentado o calculado) es negativo, cuánto se ha adelantado de más
+   * (se recupera en la Renta, no en el 130). `null` si no es negativo. */
+  adelantadoDeMas: number | null;
+}
+
+/** El 130 no sale a devolver: si el resultado es negativo, se presenta tal cual en la [07], pero lo
+ * que de verdad se ingresa (la [19]) es 0,00 €. */
+export function resultado130Mostrado(resultado: number): Resultado130Mostrado {
+  return resultado < 0 ? { aIngresar: 0, adelantadoDeMas: round2(-resultado) } : { aIngresar: round2(resultado), adelantadoDeMas: null };
+}
+
 export interface SaldoFaltante {
   anio: number;
   trimestre: number;

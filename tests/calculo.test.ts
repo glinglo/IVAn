@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import datos from "./fixtures/datos_2026.json";
-import { modelo130, modelo303, modelo349, nifComunitario, pyg, subvencionesDelAnio, type DatosCalc } from "../lib/calculo";
+import {
+  amortizacionDelAnio,
+  amortizacionDelAnioPorBien,
+  modelo130,
+  modelo303,
+  modelo349,
+  nifComunitario,
+  pyg,
+  subvencionesDelAnio,
+  type DatosCalc,
+} from "../lib/calculo";
 
 const base = (cuota: number): DatosCalc => ({
   facturas: datos.facturas as DatosCalc["facturas"],
@@ -75,5 +85,23 @@ describe("Subvención de capital (Kit Digital del Mac)", () => {
     expect(p.rendimientoNeto).toBe(20549.28); // 20302,26 sin subvención + 247,02 (260 € menos el 5 % de la propia subvención)
     const m130 = modelo130(conSubvencion, 2026, 4);
     expect(m130.c01).toBe(29720); // 29460 + 260
+  });
+});
+
+describe("amortizacionDelAnioPorBien", () => {
+  const bienes = [
+    { fecha_compra: "2025-01-01", base: 2399.08, pct_anual: 26 },
+    { fecha_compra: "2026-06-01", base: 1000, pct_anual: 26 },
+  ];
+
+  it("suma lo mismo que amortizacionDelAnio", () => {
+    const porBien = amortizacionDelAnioPorBien(bienes, "2026-12-31");
+    expect(porBien.reduce((s, v) => s + v, 0)).toBe(amortizacionDelAnio(bienes, "2026-12-31"));
+  });
+
+  it("un bien comprado a mitad de año solo amortiza desde entonces", () => {
+    const porBien = amortizacionDelAnioPorBien(bienes, "2026-12-31");
+    expect(porBien[1]).toBeGreaterThan(0);
+    expect(amortizacionDelAnioPorBien(bienes, "2026-05-31")[1]).toBe(0);
   });
 });

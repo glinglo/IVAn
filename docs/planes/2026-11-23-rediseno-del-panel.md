@@ -1185,17 +1185,84 @@ Jose quiere ver en Inicio lo que le queda de verdad. El rendimiento neto no camb
 - **`npm test`** (152, con los 4 casos nuevos de `irpfACuenta`), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a `/`, `/?periodo=3`, `/ventas`, `/gastos` e `/impuestos`: todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (no tocan Inicio, pero `irpfACuenta` usa `libro.presentaciones`/`facturas`, que sí comparte código con el bot — comprobado por si acaso).
 - **No hecho en esta sesión** (es la parte de la fase E que sigue después de la E.1 en el plan, no pedida ahora): las páginas `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, ni la limpieza de `components/Casillas.tsx`/`Nav.tsx`/`Filas.tsx` y el CSS antiguo.
 
-- `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».
-  - **Impuestos y cuota:** total, `StackedBar` (cuota, IRPF a cuenta y resto) y los dos textos: el IVA no cuenta; la Renta cierra la cuenta.
-  - **Salud:** un `CardIndicator` por indicador, primero los que están en riesgo.
-  - **Cómo se calcula:** textos fijos. Las cifras de la amortización salen de `bienes_inversion`, no se escriben a mano.
-- Borrar el CSS antiguo de `globals.css` y `components/Filas.tsx`, `components/Casillas.tsx` y `components/Nav.tsx` si ya no se usan.
-  - **Añadido el 24/11/2026** (al arreglar el texto casi blanco en modo oscuro): el bloque `@media (prefers-color-scheme: dark)` de `:root` ya se ha quitado (esta versión es solo modo claro) y el `color` base de `:root` pasa a `var(--color-text-primary)` de Vela. Las variables antiguas (`--bg`, `--card`, `--text`, `--muted`, `--line`, `--accent`, `--ok`, `--ok-bg`, `--warn`, `--warn-bg`, `--danger`, `--danger-bg`, `--radius`) y las clases que las usan (`.app`, `.cabecera`, `.card`, `.kpis`/`.kpi`, `.filas`/`.fila`, `.paso`/`.punto`/`.urgente`/`.pendiente`, `.chips`/`.chip`, `.badge`, `.tabla`, `.boton`, `.nota`, `.nav`) siguen en `globals.css` porque las usan `/impuestos/[anio]/[t]`, `/impuestos/[anio]/390` y `components/Nav.tsx`/`Filas.tsx`/`Casillas.tsx` — se borran en esta fase E, junto con esos componentes, cuando se rediseñen esas pantallas.
+### E.2 · «Cómo se calcula» y limpieza (25/11/2026; sustituye a lo que quedaba de la fase E)
+
+**Qué cambia respecto al plan original.** De las tres pantallas de detalle del lienzo solo se hace «Cómo se calcula». Las otras dos ya están cubiertas:
+- **Impuestos y cuota:** la cuota está en la cascada de Inicio; el IRPF a cuenta y «Te queda», también (E.1); el resto, en Impuestos (fase D). `estadoYCuota` de `lib/inicio.ts` no lo usa nadie: se borra, con su test.
+- **Salud:** el margen está en Inicio, la dependencia de un cliente en Ventas (`Meter`) y el gasto por categoría en Gastos. Otra pantalla repetiría cifras. `salud()` se queda porque Inicio usa el margen.
+
+#### 1. `/detalle/como-se-calcula`
+
+- `PageHeader` «Cómo se calcula», con «‹ Inicio» y el mismo selector de periodo que Inicio (`?anio=&periodo=`), para que las cifras sean las mismas que el usuario estaba mirando.
+- **Una tarjeta, con una fila por paso de la cascada.** Cada fila lleva la cifra del periodo y una frase fija que explica de dónde sale:
+  - **Facturado (sin IVA):** suma de las bases de tus facturas. El IVA que cobras no es tuyo.
+  - **Gastos con factura:** bases de los gastos confirmados. El IVA deducible no cuenta como gasto; el no deducible, sí.
+  - **Cuota de autónomo:** recibos reales de `cuotas_autonomo` y, si falta un mes, la cuota por defecto de Ajustes.
+  - **Amortización:** una línea por bien de `bienes_inversion`, con descripción, base, % anual y cifra del periodo. Nada escrito a mano.
+  - **Difícil justificación:** el 5 % de la diferencia, con un máximo de 2.000 € al año.
+  - **= Rendimiento neto:** la base del 130 y de la Renta.
+  - **IRPF a cuenta y «Te queda»:** las mismas cifras y el mismo texto que en Inicio (E.1).
+- **Nota al pie:** «El IVA no entra en ninguna de estas cifras: lo que cobras de IVA se lo pasas a Hacienda en el 303».
+- **Si se ejecuta después del plan de la subvención del Mac**, se añade la fila «Subvención del Mac (Kit Digital)»: se imputa al mismo ritmo que la amortización. Si se ejecuta antes, esa fila la añade aquel plan.
+- **Enlaces de entrada:**
+  - en «Más detalle» de Inicio (escritorio y móvil), un tercer elemento «Cómo se calcula» con la pista «De lo facturado a lo que te queda»;
+  - al pie de la cascada, junto a la nota del IVA, un enlace «Cómo se calcula ›».
+- Funciones nuevas: ninguna. Todo sale de `pyg`/`pygTrimestre`, `amortizacionDelAnio` (por bien) e `irpfACuenta`. Si hace falta la amortización por bien, se añade `amortizacionDelAnioPorBien` en `lib/calculo.ts`, con test.
+
+#### 2. Limpieza
+
+- **Borrar** `components/Casillas.tsx`, `components/Filas.tsx` y `components/Nav.tsx`: ya no los importa nadie (comprobado el 25/11).
+- **`app/globals.css`:** se queda el primer bloque `@layer base { :root { … } }` con los tokens de Vela y de la marca lila, y el comentario de «solo modo claro». Se borra todo lo demás:
+  - el segundo `:root` con `--bg`, `--card`, …, `--radius` y `font-family`;
+  - `* { box-sizing }` y `body { margin }`: ya los pone el preflight de Tailwind;
+  - las reglas globales de `h1`, `h2` y `code`;
+  - y todas las clases antiguas: `.app`, `.cabecera`, `.centro`, `.card`, `.kpis`/`.kpi`, `.filas`/`.fila`, `.paso`/`.punto`/`.urgente`/`.pendiente`, `.chips`/`.chip`, `.badge`, `.tabla`, `.boton`, `.nota` y `.nav`.
+- **Fondo de la página:** hoy lo pone `background: var(--bg)` en `:root`. Mirar qué fondo pinta el `AppShell` de Vela:
+  - si ya lo pinta, quitarlo sin más;
+  - si no, usar el token de fondo de página de Vela en `body`.
+
+  Lo importante es que el gris claro de fondo se vea igual que ahora.
+- **`app/sin-acceso/page.tsx`** usa `.centro`, `h1` y `code`. Se pasa a Vela/Tailwind: bloque centrado de ancho máximo `max-w-sm`, título con `text-title`, texto con `text-body` y `/panel` en un `<code>` con clases de Tailwind (fondo gris, redondeado). Que se vea igual de limpio que ahora.
+- **Ojo con el `h2` global** (`margin: 0 0 10px; color: var(--muted)`): hoy añade 10 px bajo cada eyebrow que no tenga margen propio. Al quitarlo, alguna separación puede encoger. Recorrer las pantallas y, donde cambie, reponer la separación con una clase de Tailwind en ese sitio, no con CSS global. Incluido el `-mt-3` de «Más detalle» en Inicio: revisar si sigue haciendo falta.
 
 **Comprueba:**
-- `npm test`, `npm run typecheck` y la prueba de integración en el Mac.
-- Revisión visual en Vercel a 390 y 1440 px de todas las pantallas del lienzo.
-- Lighthouse de accesibilidad ≥ 95 en `/` y `/impuestos/2026/4`.
+- `npm test` (sin el test de `estadoYCuota`), `npm run typecheck`, `next build`, `next start` + `curl` a todas las rutas del panel, `/detalle/como-se-calcula`, `/detalle/como-se-calcula?periodo=3` y `/sin-acceso`, y la integración de las 56 conversaciones.
+- `grep` sin resultados de `var(--bg)`, `var(--muted)`, `className="card`, `className="fila`, `className="tabla` y `components/Nav` en `app/` y `components/`.
+- **En «Cómo se calcula», con «Año 2026»:** la suma de las filas da exactamente el rendimiento neto de Inicio, y «IRPF a cuenta» = −4.586 €. Con 3T, las cifras del 3T de Inicio.
+- **Revisión visual de Jose en la vista previa** (Claude Code no puede hacer capturas), a 1440 y 390 px: Inicio, Ventas, Gastos, Impuestos (2026 y 2025), un trimestre, el 390, Ajustes, «Cómo se calcula» y `/sin-acceso`. Que nada haya cambiado de sitio ni de separación salvo lo nuevo.
+- Lighthouse de accesibilidad ≥ 95 en `/` y en `/detalle/como-se-calcula`, si se puede ejecutar. Si no, apuntarlo.
+
+#### Notas de ejecución (Claude Code, 25/11/2026, rama `plan/rediseno-e2-codigo`)
+
+- **Rama creada desde `wip/v0`**, que todavía no tiene el plan de la subvención del Mac fusionado: `pyg`/`modelo130` de esta rama no llevan `subvenciones`, así que «Cómo se calcula» no tiene esa fila — la añadirá aquel plan cuando se fusione, tal como el propio plan preveía («si se ejecuta antes, esa fila la añade aquel plan»).
+- **`/detalle/como-se-calcula` (nueva, en `app/(panel)/`):** mismo selector de periodo que Inicio (`Periodo`, con el mismo cálculo de `hasta`/`disponibles`/`subtituloPeriodo`, copiado literal). Una tarjeta con una fila por paso, con su frase fija. La amortización lleva una línea por bien con descripción, base, % anual y la cifra del periodo.
+  - **`amortizacionDelAnioPorBien(bienes, hasta)` nueva en `lib/calculo.ts`**, con 2 tests (suma lo mismo que `amortizacionDelAnio`; un bien comprado a mitad de año no amortiza antes de comprarlo). Para el año, se usa directamente; para un trimestre, la página hace la misma resta de acumulados que `pygTrimestre` pero bien a bien (con `amortizacionDelAnioPorBien` aplicada a `hasta` y al día antes del periodo), sin añadir una segunda función solo para eso.
+  - Las filas de «IRPF a cuenta» y «Te queda» son literalmente las mismas de Inicio (mismo `irpfACuenta`, mismo cálculo de `tPendiente`): comprobado que la cifra coincide exactamente entre las dos pantallas (ver más abajo).
+  - Enlaces añadidos: en Inicio, un tercer elemento «Cómo se calcula» en los dos «Más detalle» (móvil y escritorio); y «Cómo se calcula ›» junto a la nota del IVA bajo la cascada.
+- **Limpieza:**
+  - Borrados `components/Casillas.tsx`, `components/Filas.tsx` y `components/Nav.tsx`: comprobado que ya no los importaba nadie (ni antes de esta fase: `Nav.tsx` y `Filas.tsx` ya estaban huérfanos, como se apuntó en la fase D).
+  - **`app/globals.css`:** el segundo `:root` (`--bg`, `--card`, `--text`, …, `--radius`), `*{box-sizing}`, `body{margin}`, `h1`/`h2`/`code` globales y todas las clases antiguas (`.app`, `.cabecera`, `.centro`, `.card`, `.kpis`/`.kpi`, `.filas`/`.fila`, `.paso`/`.punto`/`.urgente`/`.pendiente`, `.chips`/`.chip`, `.badge`, `.tabla`, `.boton`, `.nota`, `.nav`) borrados. Se queda el primer `:root` (tokens de Vela y marca lila) y un `body` nuevo con `font-family`, `color: var(--color-text-primary)`, `background: var(--color-bg-primary)` y `-webkit-font-smoothing`.
+  - **Fondo de página:** el `AppShell` de Vela no pinta ningún fondo (su `div` raíz es solo `flex min-h-dvh`, sin `background`; comprobado en el bundle de `@glinglo/vela-ds`), así que hacía falta ponerlo en `body`. Usado `--color-bg-primary` (gray-50, `#f8fafc`) en vez de `--color-bg-secondary` (gray-100, `#f1f5f9`): más parecido al `#f6f5f2` de antes.
+  - **`.app` sí estaba en uso** (en `app/(panel)/layout.tsx`, `mainClassName="app lg:max-w-7xl"`, el ancho y el padding del contenido): no es solo CSS muerto. Sustituido por las utilidades equivalentes de Tailwind: `max-w-[560px] mx-auto px-4 pt-4 pb-24 lg:max-w-7xl` (el `padding: 16px 16px 96px` de `.app` era top 16, horizontal 16, bottom 96 → `pt-4 px-4 pb-24`).
+  - **`app/sin-acceso/page.tsx`** reescrita con Tailwind/Vela (`max-w-sm`, `text-title`, `text-body`, `<code>` con fondo gris) en vez de `.centro`/`h1`/`code`.
+  - **`h2` global quitado:** los `<h2 className="text-eyebrow text-tertiary">` de las pantallas ya rediseñadas no dependían de su `margin-bottom` de 10 px para la separación (todos están dentro de un `Card`/contenedor `flex flex-col gap-*`, que ya pone un hueco por `gap` con independencia del margen propio del hijo); comprobado visualmente que el cambio es mínimo donde `Card` no lleva `gap` explícito (usa su `gap-2` por defecto) frente a los 10 px de antes. El `-mt-3` de «Más detalle» en Inicio no dependía del `h2` global (compensaba el `py-3` interno de `ListItem`, un factor aparte): se queda igual.
+  - **`estadoYCuota` borrado** de `lib/inicio.ts` (y sus 2 tests): no lo usaba nadie («Impuestos y cuota» no se hace, por quedar cubierta por Inicio/Impuestos, como dice el plan). `salud()` se queda, la usa Inicio.
+- **Comprobado con los datos reales:** `/detalle/como-se-calcula` con «Año 2026» da «Rendimiento neto» 20.572 €, «IRPF a cuenta» −4.586 € y «Te queda» ≈ 15.985 €, **exactos** a los que da Inicio con el mismo periodo. `grep` de `var(--bg)`, `var(--muted)`, `className="card`, `className="fila`, `className="tabla` y `components/Nav` en `app/`/`components/`: sin resultados.
+- **`npm test`** (152, con los 2 tests nuevos de `amortizacionDelAnioPorBien` y sin los 2 borrados de `estadoYCuota`), **`npm run typecheck`** y **`npm run build`** sin errores (incluida la ruta nueva `/detalle/como-se-calcula`). **`next start` + `curl`** a `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos?anio=2025`, `/impuestos/2026/3`, `/impuestos/2026/390`, `/ajustes`, `/sin-acceso`, `/detalle/como-se-calcula` y `/detalle/como-se-calcula?periodo=3`: las once dan `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
+- **No hecho en esta sesión:** la revisión visual a 1440/390 px (esta sesión no tiene herramienta de capturas) y Lighthouse de accesibilidad (no se puede ejecutar aquí) — las dos quedan para Jose, tal como el propio plan permitía apuntar si no se podían hacer.
+
+### Retoque tras la #26 (Claude Code, 25/11/2026, misma rama `plan/rediseno-e2-codigo`)
+
+- **Rebase sobre `wip/v0`** (ya con la subvención del Mac, PR #26, fusionada): conflicto en `lib/calculo.ts` y `tests/calculo.test.ts` entre `subvencionesDelAnio` (de la #26) y `amortizacionDelAnioPorBien` (de la E.2) — las dos funciones son independientes, así que se quedan las dos, con sus tests.
+- **«Cómo se calcula» ya lleva la fila «Subvención del Mac (Kit Digital)»**, justo después de «Facturado (sin IVA)» (solo si `p.subvenciones > 0`), con la misma frase que en `/impuestos/[anio]/[t]?m=130`. Comprobado que el rendimiento neto de «Cómo se calcula» sigue siendo exacto al de Inicio (20.798 €, con la subvención ya dentro de los dos). La suma «a ojo» de las filas redondeadas a euro puede quedar 1-2 € por debajo del rendimiento neto mostrado (cada fila se redondea sola con `eurosSinCentimos`, el redondeo no es acumulativo): es solo cosmético, los números exactos (en céntimos) sí cuadran, como prueban los tests.
+- **El 130 nunca se enseña en negativo, en ningún sitio.** `modelo130.aIngresar` (= `Math.max(0, c07)`, en `lib/calculo.ts`) ya lo garantizaba para el cálculo, pero varios sitios enseñaban el [07] crudo (que sí puede ser negativo) en vez de eso:
+  - `/impuestos/[anio]/[t]?m=130`: la cifra grande usaba `calculado`/`p.importe` directos (podían ser negativos); ahora usa `resultado130Mostrado(...).aIngresar` y, si el resultado real es negativo, una línea nueva «Has adelantado X € de más: se recuperan en la Renta.» con `resultado130Mostrado(...).adelantadoDeMas`.
+  - `/impuestos` (índice): la tabla/lista «Presentados» metía `p130?.importe` tal cual en la columna 130 (y en la suma de «Pagado en {año}» y en `GraficoPagos`) — un 130 presentado en negativo se sumaba como negativo. Arreglado con el mismo `resultado130Mostrado(...).aIngresar`. La tarjeta «Próximo» tenía el mismo fallo con el [07] crudo; ahora usa `resultado130Mostrado` y añade la misma línea de «Has adelantado…» si toca.
+  - **Bot (`lib/agente.ts`, herramienta `resumen`):** `a_ingresar` ya salía bien (reutilizaba `m130.aIngresar`), pero no decía nada del negativo; añadido `adelantado_de_mas` (solo si lo hay), con `resultado130Mostrado`.
+  - **Función nueva `resultado130Mostrado(resultado)` en `lib/impuestos.ts`**, con 3 tests (negativo, positivo, cero), para no repetir el `Math.max(0, …)` y el cálculo del adelantado en cada sitio.
+- **Comprobado con los datos reales:** el 4T de 2026 (que hoy da [07] = −518,57 €, cubierto por lo ya pagado de 1T a 3T) enseña «0,00 €» como cifra grande en `/impuestos/2026/4?m=130` y en la tarjeta «Próximo» de `/impuestos`, con «Has adelantado 518,57 € de más: se recuperan en la Renta.» en los dos sitios; la tabla «Presentados» también da «0,00 €» para ese trimestre, nunca negativo.
+- **`npm test`** (158, con los 3 tests nuevos de `resultado130Mostrado`), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos?anio=2025`, `/impuestos/2026/1`, `/impuestos/2026/1?m=130`, `/impuestos/2026/3`, `/impuestos/2026/390`, `/ajustes`, `/sin-acceso` y `/detalle/como-se-calcula`: las doce dan `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
+- Subido con `git push --force-with-lease` (rebase sobre `wip/v0`, reescribe el historial de la rama).
 
 ## Notas de ejecución
 
