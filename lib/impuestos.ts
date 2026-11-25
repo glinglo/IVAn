@@ -42,25 +42,36 @@ export interface SaldoFaltante {
 }
 
 /**
- * El [110] esperado de cada 303 es el [87] del trimestre anterior más lo que dejó «a compensar»
- * (−[71] si fue negativo). Si un [110] presentado es menor que el esperado, la gestoría no arrastró
- * ese saldo: devuelve el primer trimestre donde falta y cuánto. Un [110] mayor (a favor de Jose,
- * sin explicar) no se avisa, solo lo que falta. Pura: recibe los 303 presentados con sus casillas.
+ * El [110] esperado de cada 303 (salvo el primero de la serie, que se acepta tal cual: es el saldo
+ * de antes de tener los datos) es el [87] del trimestre anterior, pero recalculado con el [110] que
+ * tocaba (no el presentado, que puede traer de más): `min([110] presentada, esperado) − [78]`, más
+ * lo que dejó «a compensar» ese trimestre (`max(0, −[71])`). Así un [110] inflado sin explicar (un
+ * exceso que la gestoría no justifica) no se arrastra a los trimestres siguientes.
+ *
+ * Si un [110] presentado es menor que el esperado, la gestoría no arrastró ese saldo: devuelve el
+ * primer trimestre donde falta y cuánto. Un [110] mayor no se avisa, solo lo que falta. Pura: recibe
+ * los 303 presentados con sus casillas.
  */
 export function saldoIvaCompensar(presentaciones303: Pick<Presentacion, "anio" | "trimestre" | "casillas">[]): SaldoFaltante | null {
   const ordenadas = [...presentaciones303]
     .filter((p): p is { anio: number; trimestre: number; casillas: Casillas303 } => !!p.casillas)
     .sort((a, b) => a.anio - b.anio || a.trimestre - b.trimestre);
 
-  let esperado110 = 0;
+  let esperado110: number | null = null;
   for (const p of ordenadas) {
     const c110 = p.casillas["110"] ?? 0;
-    const c87 = p.casillas["87"] ?? 0;
+    const c78 = p.casillas["78"] ?? 0;
     const c71 = p.casillas["71"] ?? 0;
-    if (c110 < round2(esperado110) - 0.01) {
-      return { anio: p.anio, trimestre: p.trimestre, esperado: round2(esperado110), presentado: c110, falta: round2(esperado110 - c110) };
+    let corregido87: number;
+    if (esperado110 === null) {
+      corregido87 = round2(c110 - c78);
+    } else {
+      if (c110 < esperado110 - 0.01) {
+        return { anio: p.anio, trimestre: p.trimestre, esperado: esperado110, presentado: c110, falta: round2(esperado110 - c110) };
+      }
+      corregido87 = round2(Math.min(c110, esperado110) - c78);
     }
-    esperado110 = c87 + Math.max(0, -c71);
+    esperado110 = round2(corregido87 + Math.max(0, -c71));
   }
   return null;
 }
