@@ -1264,6 +1264,65 @@ Jose quiere ver en Inicio lo que le queda de verdad. El rendimiento neto no camb
 - **`npm test`** (158, con los 3 tests nuevos de `resultado130Mostrado`), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a `/`, `/ventas`, `/gastos`, `/impuestos`, `/impuestos?anio=2025`, `/impuestos/2026/1`, `/impuestos/2026/1?m=130`, `/impuestos/2026/3`, `/impuestos/2026/390`, `/ajustes`, `/sin-acceso` y `/detalle/como-se-calcula`: las doce dan `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (en la base local).
 - Subido con `git push --force-with-lease` (rebase sobre `wip/v0`, reescribe el historial de la rama).
 
+
+## Fase F · Impuestos con menos ruido (25/11/2026)
+
+Al revisar la pantalla después de la E.2, `/impuestos` tiene demasiado ruido: la tarjeta «Próximo» trae seis líneas, la tabla repite cada dato con una etiqueta y la columna derecha tiene cuatro tarjetas. Diseño: lienzo, fila «Propuesta 25/11 · Impuestos v3», tableros `ImpuestosEscritorio3` e `ImpuestosMovil3`. Solo cambia el índice `/impuestos` del año en curso y el cálculo del aviso del saldo. El trimestre, el 390 y los años anteriores no cambian, salvo lo que se indica.
+
+### 1. Cabecera
+
+- `PageHeader`: el subtítulo pasa de «2026» (que repite el selector) a «Lo que te toca presentar y lo que ya has pagado». Igual en los años anteriores.
+
+### 2. Tarjeta «Próximo»
+
+- Eyebrow, título y una línea: «Próximo · en 37 días», «4T de 2026» y «Del 1 de enero al lunes 1 de febrero». Las fechas en texto, con `fechaLarga` si existe; si no, se añade a `lib/fiscal.ts` con test.
+- Debajo, dos cifras grandes en fila: «303 · IVA» y «130 · IRPF», con el importe que se ingresa (el 130 con `resultado130Mostrado`, nunca negativo), y el botón «Preparar el 4T» a la derecha. En móvil, el botón ocupa todo el ancho, debajo.
+- **Fuera:** la línea de domiciliación, las frases de `frase303`/`frase130`, «Has adelantado X € de más…» y «También 349 y 390». Todo eso sigue en `/impuestos/[anio]/[t]`.
+- La variante `urgent` (≤ 10 días con el plazo abierto) se queda igual, con el mismo contenido reducido.
+
+### 3. «Presentados en {año}»
+
+- **Escritorio:** columnas Trimestre · Presentado · 303 · IVA (a la derecha) · 130 · IRPF (a la derecha) · chevron. Cada fila entera enlaza al trimestre.
+  - **Presentado:** la fecha corta (`14/04`), o una sola etiqueta `Pendiente` (amarilla) si no está presentado.
+  - **303:** solo el importe. Si es negativo, «a compensar» al lado, en `text-caption text-tertiary`. Sin etiqueta.
+  - **130:** solo el importe que se ingresa. Sin la etiqueta «Presentado» ni «Provisional».
+  - Los trimestres sin presentar llevan los importes en gris (`text-tertiary`).
+- **Móvil:** un `ListItem` por trimestre. A la izquierda el trimestre y «Presentado el 14/04» (o la etiqueta `Pendiente`); a la derecha dos líneas, «303 …» y «130 …»; y el chevron.
+- **Fuera:** la nota «El 130 de la gestoría no incluía tu cuota de autónomo…». Ya lo explica el trimestre con «IVAn calcula X € (cuenta tu cuota de autónomo como gasto)».
+
+### 4. Columna derecha: dos tarjetas
+
+- **Aviso del saldo** (si lo hay): eyebrow «A revisar en el cierre», «{falta} de IVA a tu favor» y una frase: «No se arrastraron en el 303 del {t}T. Lo decidimos en el cierre de enero».
+- **«Pagado en {año}»**, una sola tarjeta:
+  - la cifra grande y «IRPF a cuenta X · IVA Y», como ahora;
+  - debajo, un separador y «Otros años»: una fila por año de `cargarPagadoPorAnio` (sin el año que se está viendo), con el importe sin céntimos y una barra fina gris proporcional al mayor.
+- **Fuera:** `GraficoPagos` (el gráfico por trimestre repite la tabla), la tarjeta «Lo pagado cada año» (pasa a «Otros años») y la tarjeta «Resumen anual». El 390 se sigue abriendo desde el 4T («Este trimestre también» del trimestre) y desde el bot. Si `components/GraficoPagos.tsx` se queda sin uso, se borra.
+
+### 5. El aviso del saldo: 752,97 €, no 755,53 €
+
+El 390 de 2025 que presentó la gestoría (28/01/2026) deja **752,97 €** a compensar en la [97]: la suma de los cuatro 303 de 2025. El 303 del 4T de 2025 puso en la [110] 2,56 € más de lo que arrastraba el 3T (679,93 € frente a 677,37 €), sin origen. `saldoIvaCompensar` hoy se fía de cada [87] presentada y arrastra esos 2,56 €.
+
+**Regla nueva** (en `lib/impuestos.ts`):
+- **En la primera presentación** de la serie, se acepta la [110] tal como viene, porque es el saldo que traía de antes de los datos (459,04 € de 2022).
+- **En las demás**, el saldo esperado del trimestre siguiente es `min([110] presentada, esperado) − [78] + max(0, −[71])`. Es decir: si una [110] trae más de lo esperado, no se da por bueno el exceso.
+- Si una [110] presentada es menor que la esperada, se avisa del primer trimestre donde falta, como ahora.
+
+**Tests** (en `tests/impuestos.test.ts`, con la serie real de 2023 al 3T de 2026):
+- avisa del 2T de 2026, con esperado **755,39 €**, presentado **2,42 €** y falta **752,97 €**;
+- una serie sin excesos da lo mismo que la regla anterior;
+- la [78] aplicada en 2024 (462,21 € y 204,52 €) no provoca aviso.
+
+Si existe un test con 755,53 €, se cambia a 752,97 € y se apunta en las notas.
+
+**Comprueba:**
+- `npm test`, `npm run typecheck`, `next build`, `next start` + `curl` a `/impuestos`, `/impuestos?anio=2025`, `/impuestos/2026/4` y `/impuestos/2026/390`, y la integración de las 56 conversaciones (el bot no cambia, pero comparte `lib/impuestos.ts`).
+- **Con los datos reales:**
+  - aviso de **752,97 €**;
+  - «Pagado en 2026» = 4.640,92 € con «Otros años» 2025 7.202 €, 2024 9.933 € y 2023 10.172 €;
+  - tabla con −2,42 / −0,42 / 207,46 / 0 y 1.503,78 / 1.530,54 / 1.399,14 / 0;
+  - «Próximo» con 0 € y 0 €.
+- **Revisión visual de Jose** a 1440 y 390 px frente a `ImpuestosEscritorio3` e `ImpuestosMovil3`.
+
 ## Notas de ejecución
 
 ### Fase A (23/11/2026, Claude Code, rama `plan/rediseno-a`)
