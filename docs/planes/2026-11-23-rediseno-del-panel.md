@@ -1144,6 +1144,47 @@ El cálculo de IVAn solo se usa para los trimestres sin presentar (hoy, el 4T), 
 
 ## Fase E · Segundo nivel y limpieza
 
+### E.1 · Inicio: «Te queda» después del IRPF a cuenta (añadido el 24/11/2026)
+
+Jose quiere ver en Inicio lo que le queda de verdad. El rendimiento neto no cambia: es la base del 130 y de la Renta. Lo que se añade es lo que va después.
+
+**Qué entra y qué no:**
+- **IVA (303): no entra.** No es dinero de Jose y los ingresos ya van sin IVA. El saldo a compensar tampoco: es a su favor y se ve en Impuestos.
+- **IRPF a cuenta: sí entra**, en dos partes:
+  - **Pagado:** los importes del 130 presentados (`presentaciones`, modelo 130) más las retenciones de las facturas (`pyg().retenciones`).
+  - **Por pagar:** el 130 del trimestre que aún no se ha presentado, estimado con `modelo130(d, anio, t).aIngresar`. Por ejemplo, en noviembre es el 4T, que se paga en enero. Si sale 0, la línea no aparece.
+
+**Con el periodo seleccionado:**
+- **Año:** suma de los 130 de los trimestres del año más las retenciones del año. «Por pagar» solo si hay un trimestre sin presentar.
+- **1T…4T:** el 130 de ese trimestre (el presentado o, si no lo está, el estimado) más las retenciones de las facturas de ese trimestre. Así cuadra con «solo ese trimestre»: los importes del 130 ya son por trimestre.
+
+**Función nueva en `lib/libro.ts`, con tests:** `irpfACuenta(libro, presentaciones, anio, periodo, hoy) → { pagado130, retenciones, porPagar, total }`. Casos:
+- 2026 con 1T–3T presentados y el 4T estimado.
+- Un trimestre presentado.
+- Un trimestre sin presentar.
+- 130 a 0.
+
+**En la tarjeta «Resultados»:**
+- La `Cascada` termina en «Rendimiento neto», como ahora, y sigue con dos filas en otro estilo, separadas por una línea:
+  - «IRPF a cuenta» en negativo. Con «Por pagar», detalle debajo: «4.586 € pagados + ≈ X € del 4T (se paga en enero)».
+  - **«Te queda ≈ …»** en negrita.
+- Nota corta bajo la cascada: «El IVA no cuenta: no es tuyo. La Renta ajusta el IRPF: puede salir a pagar o a devolver».
+- La cifra grande sigue siendo el rendimiento neto, que es la que cuadra con el 130 y la Renta.
+- La frase «De cada 100 € que facturas, te quedan X €» pasa a «… te quedan X € antes del IRPF».
+- El tooltip «Antes del IRPF de la Renta…» se queda.
+- Móvil igual, con el mismo orden.
+
+**Comprueba:** con «Año 2026», «IRPF a cuenta pagado» = 130 de 1T–3T + retenciones ≈ 4.586 €. «Te queda» = rendimiento neto − IRPF a cuenta (pagado + por pagar).
+
+#### Notas de ejecución (Claude Code, 25/11/2026, rama `plan/rediseno-e1`)
+
+- **`irpfACuenta(libro, presentaciones, anio, periodo, hoy)`** en `lib/libro.ts`, con tests (año con 1T-3T presentados y el 4T estimado; un trimestre presentado; un trimestre sin presentar; 130 a 0 sin que `porPagar` se añada). `pagado130` suma el `importe` de `presentaciones` (modelo 130) de los trimestres del periodo que ya lo tienen; `porPagar` suma `modelo130(...).aIngresar` de los que no, solo si sale positivo; `retenciones` sale de `libro.facturas` filtradas por el rango del periodo (año o trimestre), no de `pyg`, para no tener que exportar nada nuevo de `lib/calculo.ts`. `total = pagado130 + retenciones + porPagar`.
+- **`app/(panel)/page.tsx`:** bajo la `Cascada` (mismo `lg:basis-2/3`, sin tocar `Waterfall`), una línea «IRPF a cuenta −{total}», el detalle «{pagado130+retenciones} pagados + ≈ {porPagar} del {t}T (se paga en {mes de apertura del plazo de ese trimestre})» solo si `porPagar > 0`, y «Te queda ≈ {rendimientoNeto − total}» en negrita. Nota corta debajo de toda la fila (cascada + resultados), no solo bajo la columna de la cascada: una sola línea a todo el ancho de la tarjeta es más simple que partirla por columna y no cambia el contenido. La frase de margen pasa a «…te quedan X € antes del IRPF».
+- **Trimestre pendiente de la línea de detalle:** no lo devuelve `irpfACuenta` (la función no distingue qué trimestre concreto generó `porPagar`); la página lo calcula aparte como `periodo ?? (anio actual ? trimestre de hoy : 4)`, que vale mientras como mucho un trimestre esté sin presentar a la vez (el caso real).
+- **Comprobado con los datos reales:** «Año 2026» → «IRPF a cuenta −4.586 €» (exacto a la «Comprueba» del plan) y «Te queda ≈ 15.985 €»; no sale la línea de detalle porque el 4T estimado da 0 o menos (ya cubierto por los pagos de 1T-3T), que es justamente el caso «si sale 0, la línea no aparece» que pedía el plan. «De cada 100 € que facturas, te quedan 70 € antes del IRPF.» se ve bien.
+- **`npm test`** (152, con los 4 casos nuevos de `irpfACuenta`), **`npm run typecheck`** y **`npm run build`** sin errores. **`next start` + `curl`** a `/`, `/?periodo=3`, `/ventas`, `/gastos` e `/impuestos`: todas en `200`. **Prueba de integración de las 56 conversaciones**: todas pasan (no tocan Inicio, pero `irpfACuenta` usa `libro.presentaciones`/`facturas`, que sí comparte código con el bot — comprobado por si acaso).
+- **No hecho en esta sesión** (es la parte de la fase E que sigue después de la E.1 en el plan, no pedida ahora): las páginas `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, ni la limpieza de `components/Casillas.tsx`/`Nav.tsx`/`Filas.tsx` y el CSS antiguo.
+
 - `/detalle/impuestos-y-cuota`, `/detalle/salud` y `/detalle/como-se-calcula`, como en el lienzo: `PageHeader` con «‹ Inicio».
   - **Impuestos y cuota:** total, `StackedBar` (cuota, IRPF a cuenta y resto) y los dos textos: el IVA no cuenta; la Renta cierra la cuenta.
   - **Salud:** un `CardIndicator` por indicador, primero los que están en riesgo.
