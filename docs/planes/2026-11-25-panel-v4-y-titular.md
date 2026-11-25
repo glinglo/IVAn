@@ -490,3 +490,16 @@ Maquetas: `ImpuestosEscritorio4.html` e `ImpuestosMovil4.html`.
 - Modo oscuro.
 
 ## Notas de ejecución (las rellena Claude Code)
+
+**Fase G.1 · Campo de titular (25/11/2026, rama `plan/panel-v4-g1`):**
+
+- `supabase/migrations/010_titulares.sql`: tal cual el plan, sin cambios.
+- `lib/copia.ts`: `TABLAS` empieza por `"titulares"` y `CLAVE_ORDEN.titulares = "id"`. Restaurar una copia sin la tabla `titulares` (de antes de esta fase) crea el titular desde la primera fila de `ajustes` con una función pura nueva, `titularDeCopiaAntigua`, antes del bucle normal; así queda testeable sin base de datos. `version` de la copia se queda en `1`, como pedía el plan.
+- `scripts/restaurar.ts`: comentario de cabecera actualizado (migraciones 001-010 y la nota de que las copias antiguas crean el titular solas).
+- Seeds: `supabase/seed/ajustes.ejemplo.sql` y `scripts/integracion/ajustes.prueba.sql` llevan el `insert into titulares` antes del `insert into ajustes`. No había otros `insert into ajustes` en el repo.
+- `docs/PUESTA_EN_MARCHA.md`: añadida la migración 010 al paso 2. De paso se ha corregido que al paso le faltaban las migraciones 006-009 (no estaban listadas desde antes de este plan; se apunta aquí porque no es parte del plan en sí).
+- `scripts/integracion/grants.sql` no se ha tocado: concede permisos con `on all tables in schema public`, así que ya cubre `titulares` sin cambios.
+- Tests nuevos: `tests/copia.test.ts` (unitarios, sin base de datos) comprueban que `TABLAS` empieza por `titulares` y los tres casos de `titularDeCopiaAntigua` (copia sin titulares, copia que ya los trae, copia sin ni ajustes ni titulares).
+- Comprobado en el Mac de Jose: `npm test` (166 tests), `npm run typecheck` y `npm run build`, todo en verde. `scripts/integracion/reset-db.sh` (con datos y con `--vacia`) y las 56 conversaciones de `scripts/integracion/conversaciones.ts` pasan, incluida la restauración de una copia completa en una base vacía. Además, una prueba manual aparte (script temporal, borrado al terminar) confirmó el caso que no cubren las 56 conversaciones: restaurar una copia **sin** `titulares` (como las de antes de esta fase) crea el titular desde `ajustes` y las filas toman `titular_id` por defecto.
+- No se ha tocado nada de `lib/db.ts` ni filtrado por `titular_id` en ninguna consulta, como pedía el plan.
+- PR abierto contra `wip/v0`, sin fusionar.

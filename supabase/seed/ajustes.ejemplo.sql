@@ -1,5 +1,6 @@
 -- Plantilla: cópiala como ajustes.local.sql (está en .gitignore), pon tus datos y ejecútala
--- después de las migraciones (001, 002, 003) y antes de datos_2026.sql.
+-- después de las migraciones (001 a 010) y antes de datos_2026.sql.
+insert into titulares (nombre, nif) values ('Nombre Apellidos', '00000000X') on conflict (nif) do nothing;
 insert into ajustes (id, nombre, nif, direccion, email, telefono, iban, serie, ultimo_numero, digitos_numero, cuota_autonomo_mensual, emitir_desde)
 values (1, 'Nombre Apellidos', '00000000X', 'Calle, número, CP Municipio (Provincia)', 'tu@email.com', null,
         'ES00 0000 0000 0000 0000 0000', '', 336, 5, 452,

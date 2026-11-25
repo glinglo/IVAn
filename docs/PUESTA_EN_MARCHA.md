@@ -21,8 +21,9 @@ Unos 45 minutos. Todo en plan gratis. Las claves se guardan en `.env.local` (tu 
    3. `supabase/migrations/003_paralelo.sql`
    4. `supabase/migrations/004_desglose_iva.sql`
    5. `supabase/migrations/005_permisos.sql`
-   6. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027. No se sube al repo.
-   7. `supabase/seed/datos_2026.sql`
+   6. Las migraciones 006 a 010 (en orden: `006_categoria_gastos.sql`, `007_ingresos_historicos.sql`, `008_casillas_presentadas.sql`, `009_subvencion_bienes.sql`, `010_titulares.sql`).
+   7. Tu `supabase/seed/ajustes.local.sql`: copia `ajustes.ejemplo.sql` con ese nombre y pon tu NIF, dirección, email e IBAN. Ya trae el modo paralelo hasta el 1/1/2027 y el alta del titular (la 010 crea la tabla `titulares`). No se sube al repo.
+   8. `supabase/seed/datos_2026.sql`
 3. Comprueba: `select count(*) from facturas;` → 11 · `select count(*), sum(base) from gastos;` → 71 · 2041.44.
 4. Comprueba los permisos (los proyectos de Supabase creados desde el 30/05/2026 no dan acceso a las tablas por defecto; la 005 es la que lo arregla):
    ```sql

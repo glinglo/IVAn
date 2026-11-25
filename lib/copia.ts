@@ -9,11 +9,11 @@ import { hoyMadrid, sumarDias } from "./fiscal";
 
 /** En orden de restauración (las referencias primero). */
 export const TABLAS = [
-  "ajustes", "clientes", "facturas", "gastos", "cuotas_autonomo",
+  "titulares", "ajustes", "clientes", "facturas", "gastos", "cuotas_autonomo",
   "bienes_inversion", "presentaciones", "mensajes", "recordatorios_enviados",
 ] as const;
 const CLAVE_ORDEN: Record<(typeof TABLAS)[number], string> = {
-  ajustes: "id", clientes: "id", facturas: "id", gastos: "id", cuotas_autonomo: "mes",
+  titulares: "id", ajustes: "id", clientes: "id", facturas: "id", gastos: "id", cuotas_autonomo: "mes",
   bienes_inversion: "id", presentaciones: "id", mensajes: "id", recordatorios_enviados: "clave",
 };
 export const CADA_DIAS = 7;
@@ -71,9 +71,22 @@ export async function copiaSiToca(enviar: Enviar, hoy = hoyMadrid()) {
   return enviarCopia(enviar, hoy);
 }
 
+/** Copias de antes de la tabla `titulares` no la traen: el titular sale de `ajustes`. */
+export function titularDeCopiaAntigua(copia: Pick<Copia, "tablas">): { nombre: string; nif: string } | null {
+  if ((copia.tablas.titulares ?? []).length > 0) return null;
+  const ajustes = copia.tablas.ajustes?.[0];
+  if (!ajustes) return null;
+  return { nombre: ajustes.nombre as string, nif: ajustes.nif as string };
+}
+
 /** Vuelca una copia en una base de datos con las migraciones aplicadas. No pisa lo que ya exista. */
 export async function restaurarCopia(copia: Copia): Promise<Record<string, number>> {
   if (copia.version !== 1) throw new Error(`Versión de copia desconocida: ${copia.version}`);
+  const titularAntiguo = titularDeCopiaAntigua(copia);
+  if (titularAntiguo) {
+    const { error } = await db().from("titulares").upsert(titularAntiguo, { onConflict: "nif", ignoreDuplicates: true });
+    if (error) throw new Error(`Restaurando titulares: ${error.message}`);
+  }
   const hechas: Record<string, number> = {};
   for (const t of TABLAS) {
     let filas = copia.tablas[t] ?? [];
