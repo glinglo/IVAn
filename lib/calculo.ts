@@ -34,6 +34,8 @@ export interface BienCalc {
   fecha_compra: string;
   base: number;
   pct_anual: number;
+  /** Subvención de capital que financió el bien (p. ej. el bono del Kit Digital). 0 si no hubo. */
+  subvencion?: number;
 }
 
 export interface DatosCalc {
@@ -81,6 +83,20 @@ export function amortizacionAcumulada(b: BienCalc, hasta: string): number {
 export function amortizacionDelAnio(bienes: BienCalc[], hasta: string): number {
   const finAnterior = `${Number(hasta.slice(0, 4)) - 1}-12-31`;
   return round2(bienes.reduce((s, b) => s + amortizacionAcumulada(b, hasta) - amortizacionAcumulada(b, finAnterior), 0));
+}
+
+/** Subvención de capital acumulada de un bien hasta una fecha: en la misma proporción en que se
+ * amortiza (art. 14.1.b LIRPF, norma de valoración 18.ª del PGC). */
+function subvencionAcumulada(b: BienCalc, hasta: string): number {
+  if (!b.subvencion) return 0;
+  return round2(amortizacionAcumulada(b, hasta) * (b.subvencion / b.base));
+}
+
+/** Subvención de capital que se imputa como ingreso entre el 1 de enero del año de `hasta` y
+ * `hasta`: se acaba de imputar justo cuando el bien termina de amortizarse. */
+export function subvencionesDelAnio(bienes: BienCalc[], hasta: string): number {
+  const finAnterior = `${Number(hasta.slice(0, 4)) - 1}-12-31`;
+  return round2(bienes.reduce((s, b) => s + subvencionAcumulada(b, hasta) - subvencionAcumulada(b, finAnterior), 0));
 }
 
 // ---------- Restaurantes: manutención y atenciones a clientes ----------
@@ -145,6 +161,9 @@ export interface PyG {
   desde: string;
   hasta: string;
   ingresos: number;
+  /** Subvenciones de capital imputadas (p. ej. el Kit Digital del Mac): no es lo facturado, pero
+   * cuenta como ingreso de la actividad en el rendimiento neto y en la [01] del 130. */
+  subvenciones: number;
   gastosFacturas: number;
   seguridadSocial: number;
   amortizaciones: number;
@@ -161,23 +180,25 @@ export function pyg(d: DatosCalc, hasta: string): PyG {
   const fs = d.facturas.filter((f) => enRango(f.fecha, desde, hasta));
   const gs = limitesRestauracion(d, hasta).gastos.filter((g) => enRango(g.fecha, desde, hasta));
   const ingresos = suma(fs, (f) => f.base);
+  const subvenciones = subvencionesDelAnio(d.bienes, hasta);
   const gastosFacturas = suma(gs, (g) => g.base);
   const seguridadSocial = round2(meses(desde, hasta).reduce((s, m) => s + d.cuotaMes(m), 0));
   const amortizaciones = amortizacionDelAnio(d.bienes, hasta);
-  const diferencia = round2(ingresos - gastosFacturas - seguridadSocial - amortizaciones);
+  const diferencia = round2(ingresos + subvenciones - gastosFacturas - seguridadSocial - amortizaciones);
   const dificilJustificacion = round2(Math.min(Math.max(diferencia, 0) * PCT_DIFICIL_JUSTIFICACION, MAX_DIFICIL_JUSTIFICACION));
   const gastosDeducibles = round2(gastosFacturas + seguridadSocial + amortizaciones + dificilJustificacion);
   return {
     desde,
     hasta,
     ingresos,
+    subvenciones,
     gastosFacturas,
     seguridadSocial,
     amortizaciones,
     diferencia,
     dificilJustificacion,
     gastosDeducibles,
-    rendimientoNeto: round2(ingresos - gastosDeducibles),
+    rendimientoNeto: round2(ingresos + subvenciones - gastosDeducibles),
     retenciones: suma(fs, (f) => f.retencion),
   };
 }
@@ -216,7 +237,7 @@ export function modelo130(d: DatosCalc, anio: number, t: number): Modelo130 {
     anio,
     t,
     pyg: p,
-    c01: p.ingresos,
+    c01: round2(p.ingresos + p.subvenciones),
     c02: p.gastosDeducibles,
     c03: p.rendimientoNeto,
     c04,

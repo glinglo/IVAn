@@ -91,6 +91,7 @@ export async function exportarXlsx(anio: number): Promise<ArrayBuffer> {
   const p = pyg(libro.datos, rangoTrimestre(anio, 4).hasta);
   [
     ["Ingresos", p.ingresos],
+    ["Subvenciones de capital", p.subvenciones],
     ["Gastos con factura", p.gastosFacturas],
     ["Seguridad Social del titular", p.seguridadSocial],
     ["Amortizaciones", p.amortizaciones],

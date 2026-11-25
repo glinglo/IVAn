@@ -132,7 +132,14 @@ async function ejecutar(nombre: string, e: Entrada, acciones: Acciones): Promise
         trimestre: t,
         pyg_acumulado: pygHasta(libro, hasta),
         m303: { resultado: m303.c71, devengado: m303.c27, deducible: m303.c45, base_21_casilla_07: m303.c07, cuota_21_casilla_09: m303.c09, servicios_ue: m303.c59, presentado: presentado("303") },
-        m130: { a_ingresar: m130.aIngresar, rendimiento_neto: m130.c03, pagos_anteriores: m130.c05, retenciones: m130.c06, presentado: presentado("130") },
+        m130: {
+          a_ingresar: m130.aIngresar,
+          rendimiento_neto: m130.c03,
+          pagos_anteriores: m130.c05,
+          retenciones: m130.c06,
+          presentado: presentado("130"),
+          ...(m130.pyg.subvenciones > 0 ? { subvencion_mac: m130.pyg.subvenciones } : {}),
+        },
         m349: { lineas: m349, presentado: presentado("349") },
       };
     }

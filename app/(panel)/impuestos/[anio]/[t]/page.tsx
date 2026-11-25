@@ -213,6 +213,11 @@ export default async function Trimestre({
                   ).map(([cas, nombre, v]) => (
                     <CopyValue key={cas} code={`[${cas}]`} label={nombre} display={euros(v)} copyText={formatoSede(v)} className={v === 0 ? "opacity-60" : undefined} />
                   ))}
+                  {m130!.pyg.subvenciones > 0 && (
+                    <p className="text-caption text-tertiary md:col-span-2">
+                      Incluye {euros(m130!.pyg.subvenciones)} de la subvención del Mac (Kit Digital), que se imputa a medida que se amortiza.
+                    </p>
+                  )}
                 </div>
               )}
             </>
