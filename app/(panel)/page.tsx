@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { Badge, Card, CardHeader, ListItem, PageHeader, Tooltip } from "@glinglo/vela-ds";
-import { contextoPasos, cargarLibro, pygHasta, siguientesPasos } from "@/lib/libro";
+import { contextoPasos, cargarLibro, irpfACuenta, pygHasta, siguientesPasos } from "@/lib/libro";
 import { cascada, clasificarAvisos, pygTrimestre, salud, seriesMensuales } from "@/lib/inicio";
-import { eurosSinCentimos, hoyMadrid, nombreMes, plazoTrimestral, rangoTrimestre, trimestreDe } from "@/lib/fiscal";
+import { eurosSinCentimos, hoyMadrid, nombreMes, plazoTrimestral, rangoTrimestre, round2, trimestreDe } from "@/lib/fiscal";
 import { AccionesCabecera } from "@/components/AccionesCabecera";
 import { AvisosInicio } from "@/components/AvisosInicio";
 import { PorHacerEscritorio } from "@/components/PorHacerEscritorio";
@@ -78,6 +78,10 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
   const gastosPista = `${eurosSinCentimos(pAnio.gastosFacturas)} este año`;
   const numTareas = (destacado ? 1 : 0) + resto.length;
 
+  const irpf = irpfACuenta(libro, libro.presentaciones, anio, periodo, hoy);
+  const teQueda = round2(pResultados.rendimientoNeto - irpf.total);
+  const tPendiente = irpf.porPagar > 0 ? (periodo ?? (anio === anioActual ? tHoy : 4)) : null;
+
   return (
     <div className="flex flex-col gap-8">
       <div className="relative z-20">
@@ -120,7 +124,7 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                       Margen {Math.round(margen.valor * 100)} %
                     </Badge>
                   )}
-                  <p className="text-body">De cada 100&nbsp;€ que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)}&nbsp;€.</p>
+                  <p className="text-body">De cada 100&nbsp;€ que facturas, te quedan {Math.round((margen.valor ?? 0) * 100)}&nbsp;€ antes del IRPF.</p>
                 </div>
 
                 <div className="hidden lg:block w-px bg-separator" />
@@ -129,8 +133,29 @@ export default async function Inicio({ searchParams }: { searchParams: Promise<{
                 <div className="flex flex-col gap-2 lg:basis-2/3">
                   <h3 className="text-eyebrow text-tertiary">De lo facturado al rendimiento</h3>
                   <Cascada filas={filasCascada} />
+
+                  <div className="h-px bg-separator my-1" />
+
+                  <div className="flex items-center justify-between text-body">
+                    <span>IRPF a cuenta</span>
+                    <span>-{eurosSinCentimos(irpf.total)}</span>
+                  </div>
+                  {tPendiente !== null && (
+                    <p className="text-caption text-tertiary">
+                      {eurosSinCentimos(irpf.pagado130 + irpf.retenciones)} pagados + ≈ {eurosSinCentimos(irpf.porPagar)} del {tPendiente}T (se paga en{" "}
+                      {nombreMes(plazoTrimestral(anio, tPendiente).apertura)})
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between text-body font-semibold">
+                    <span>Te queda</span>
+                    <span>≈ {eurosSinCentimos(teQueda)}</span>
+                  </div>
                 </div>
               </div>
+
+              <p className="text-caption text-tertiary">
+                El IVA no cuenta: no es tuyo. La Renta ajusta el IRPF: puede salir a pagar o a devolver.
+              </p>
 
               <div className="h-px bg-separator" />
 

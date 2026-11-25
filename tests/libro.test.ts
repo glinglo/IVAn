@@ -3,6 +3,7 @@ import {
   comparativaAnual,
   cuandoPaso,
   dependencia,
+  irpfACuenta,
   proximaFactura,
   rangoAniosDesde,
   siguientesPasos,
@@ -11,8 +12,10 @@ import {
   type FacturaLista,
   type HistoricoIngreso,
   type Libro,
+  type Presentacion,
 } from "../lib/libro";
 import type { Ajustes } from "../lib/db";
+import type { FacturaCalc } from "../lib/calculo";
 
 const ajustes = (over: Partial<Ajustes> = {}): Ajustes => ({
   nombre: "Jose",
@@ -309,3 +312,58 @@ describe("rangoAniosDesde", () => {
     expect(rangoAniosDesde(2026, 2026)).toEqual([2026]);
   });
 });
+
+describe("irpfACuenta", () => {
+  const p130 = (trimestre: number, importe: number): Presentacion => ({ modelo: "130", anio: 2026, trimestre, importe, fecha: null, casillas: null });
+
+  const facturaCalc = (fecha: string, base: number, retencion: number): FacturaCalc => ({
+    fecha, base, iva_pct: 0, iva: 0, retencion, tipo: "nacional",
+  });
+
+  const libroConFacturas = (facturas: FacturaCalc[], presentaciones: Presentacion[] = []) =>
+    libro({
+      presentaciones,
+      facturas: facturas.map((f, i) => factura({ id: `f${i}`, fecha: f.fecha, base: f.base, retencion: f.retencion, total: f.base })),
+      datos: { facturas, gastos: [], cuotaMes: () => 0, bienes: [], pagado130: () => null, ivaCompensarInicial: 0 },
+    });
+
+  it("año con 1T-3T presentados y el 4T estimado", () => {
+    const l = libroConFacturas(
+      [facturaCalc("2026-11-10", 20000, 500)],
+      [p130(1, 1503.78), p130(2, 1530.54), p130(3, 1399.14)],
+    );
+    const r = irpfACuenta(l, l.presentaciones, 2026, null, "2026-11-24");
+    expect(r.pagado130).toBe(1503.78 + 1530.54 + 1399.14);
+    expect(r.retenciones).toBe(500);
+    expect(r.porPagar).toBeGreaterThan(0); // 4T estimado, sin presentar
+    expect(r.total).toBe(round2(r.pagado130 + r.retenciones + r.porPagar));
+  });
+
+  it("un trimestre presentado: pagado130 de ese trimestre, sin porPagar", () => {
+    const l = libroConFacturas([facturaCalc("2026-02-10", 5000, 100)], [p130(1, 800)]);
+    const r = irpfACuenta(l, l.presentaciones, 2026, 1, "2026-11-24");
+    expect(r.pagado130).toBe(800);
+    expect(r.retenciones).toBe(100);
+    expect(r.porPagar).toBe(0);
+    expect(r.total).toBe(900);
+  });
+
+  it("un trimestre sin presentar: porPagar estimado, sin pagado130", () => {
+    const l = libroConFacturas([facturaCalc("2026-02-10", 10000, 0)]);
+    const r = irpfACuenta(l, l.presentaciones, 2026, 1, "2026-11-24");
+    expect(r.pagado130).toBe(0);
+    expect(r.porPagar).toBeGreaterThan(0);
+  });
+
+  it("130 a 0: porPagar no sale (no se añade 0)", () => {
+    const l = libroConFacturas([]);
+    const r = irpfACuenta(l, l.presentaciones, 2026, 1, "2026-11-24");
+    expect(r.pagado130).toBe(0);
+    expect(r.porPagar).toBe(0);
+    expect(r.total).toBe(0);
+  });
+});
+
+function round2(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}

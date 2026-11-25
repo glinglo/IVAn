@@ -2,7 +2,7 @@
 
 import { db, getAjustes, nums, type Ajustes } from "./db";
 import { modelo130, modelo303, modelo349, pyg, type DatosCalc, type FacturaCalc, type GastoCalc } from "./calculo";
-import { diasEntre, hoyMadrid, mesAnterior, nombreMes, plazoTrimestral, sumarDias, trimestreDe, type Plazo } from "./fiscal";
+import { diasEntre, hoyMadrid, mesAnterior, nombreMes, plazoTrimestral, rangoTrimestre, round2, sumarDias, trimestreDe, type Plazo } from "./fiscal";
 import { modoParalelo } from "./externas";
 import type { CategoriaGasto } from "./categorias";
 
@@ -156,6 +156,47 @@ export function resumenTrimestre(libro: Libro, t: number) {
 
 export function pygHasta(libro: Libro, hasta: string) {
   return pyg(libro.datos, hasta);
+}
+
+export interface IrpfACuenta {
+  /** 130 de los trimestres ya presentados. */
+  pagado130: number;
+  /** Retenciones de las facturas del periodo. */
+  retenciones: number;
+  /** 130 estimado de los trimestres del periodo que aún no se han presentado (0 si sale a 0 o negativo). */
+  porPagar: number;
+  /** pagado130 + retenciones + porPagar: lo que se resta al rendimiento neto para «Te queda». */
+  total: number;
+}
+
+/**
+ * IRPF a cuenta del periodo: lo ya pagado (130 presentados + retenciones de las facturas) y lo que
+ * falta por pagar (130 estimado de los trimestres del periodo sin presentar todavía). `periodo` es
+ * un trimestre (1-4) o `null` para el año completo hasta el último trimestre que toca ese año (todos
+ * si está cerrado, hasta el actual si no).
+ */
+export function irpfACuenta(libro: Libro, presentaciones: Presentacion[], anio: number, periodo: number | null, hoy: string): IrpfACuenta {
+  const anioHoy = Number(hoy.slice(0, 4));
+  const tHoy = trimestreDe(hoy).t;
+  const ultimoTrimestreDelAnio = anio === anioHoy ? tHoy : 4;
+  const trimestres = periodo === null ? Array.from({ length: ultimoTrimestreDelAnio }, (_, i) => i + 1) : [periodo];
+
+  let pagado130 = 0;
+  let porPagar = 0;
+  for (const t of trimestres) {
+    const p = presentaciones.find((x) => x.modelo === "130" && x.anio === anio && x.trimestre === t);
+    if (p?.importe !== null && p?.importe !== undefined) {
+      pagado130 = round2(pagado130 + p.importe);
+    } else {
+      const estimado = modelo130(libro.datos, anio, t).aIngresar;
+      if (estimado > 0) porPagar = round2(porPagar + estimado);
+    }
+  }
+
+  const { desde, hasta } = periodo === null ? { desde: `${anio}-01-01`, hasta: `${anio}-12-31` } : rangoTrimestre(anio, periodo);
+  const retenciones = round2(libro.facturas.filter((f) => f.fecha >= desde && f.fecha <= hasta).reduce((s, f) => s + f.retencion, 0));
+
+  return { pagado130, retenciones, porPagar, total: round2(pagado130 + retenciones + porPagar) };
 }
 
 /** Año sin facturas ni gastos en IVAn (presentado por la gestoría, pero sin datos para recalcular). */
