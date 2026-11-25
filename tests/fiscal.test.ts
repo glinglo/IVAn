@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  calcularImportes, clasificarGasto, euros, formatoSede, pct, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
+  calcularImportes, clasificarGasto, euros, fechaLarga, formatoSede, pct, plazoAbierto, plazoTrimestral, rangoTrimestre, tipoClientePorPais,
 } from "../lib/fiscal";
 import { avisosDeHoy } from "../lib/recordatorios";
 import { generarFacturaPDF, limpiar } from "../lib/pdf";
@@ -60,6 +60,10 @@ describe("plazos", () => {
   it("rango de trimestre", () => {
     expect(rangoTrimestre(2026, 4)).toEqual({ desde: "2026-10-01", hasta: "2026-12-31" });
     expect(rangoTrimestre(2026, 1)).toEqual({ desde: "2026-01-01", hasta: "2026-03-31" });
+  });
+  it("fechaLarga: con y sin el día de la semana", () => {
+    expect(fechaLarga("2027-01-01")).toBe("1 de enero");
+    expect(fechaLarga("2027-02-01", true)).toBe("lunes 1 de febrero");
   });
 });
 

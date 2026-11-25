@@ -213,6 +213,15 @@ export function nombreMes(iso: string): string {
   return NOMBRES_MES[Number(iso.slice(5, 7)) - 1];
 }
 
+const NOMBRES_DIA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+/** "2026-11-23" → "23 de noviembre"; con `conDiaSemana`, "lunes 23 de noviembre". */
+export function fechaLarga(iso: string, conDiaSemana = false): string {
+  const dia = Number(iso.slice(8, 10));
+  const texto = `${dia} de ${nombreMes(iso)}`;
+  return conDiaSemana ? `${NOMBRES_DIA[toUTC(iso).getUTCDay()]} ${texto}` : texto;
+}
+
 /** "2026-11" → "2026-10" */
 export function mesAnterior(mes: string): string {
   return sumarDias(`${mes}-01`, -1).slice(0, 7);
